@@ -27,12 +27,31 @@ jobs:
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-    - name: Restore Keystore & Environment Secrets
+    - name: Restore or Create Debug Keystore
       run: |
+        set -e
         if [ -f debug.keystore.base64 ]; then
           base64 -d debug.keystore.base64 > debug.keystore
-          echo "debug.keystore restored successfully"
+          echo "debug.keystore restored from base64"
+        elif [ ! -f debug.keystore ]; then
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          echo "debug.keystore generated successfully"
+        else
+          echo "debug.keystore already exists"
         fi
+        test -s debug.keystore
+        keytool -list -keystore debug.keystore -storepass android -alias androiddebugkey
+
+    - name: Restore Environment
+      run: |
         if [ ! -f .env ] && [ -f .env.example ]; then
           cp .env.example .env
           echo ".env created from .env.example"
