@@ -1,0 +1,6 @@
+{
+  "name": "بقالة العزي للمواد الغذائية",
+  "description": "تطبيق إدارة ونقاط بيع متكامل لبقالة العزي للمواد الغذائية مع دعم المخزون، الحسابات، التقارير، والطباعة الحرارية عبر البلوتوث",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
