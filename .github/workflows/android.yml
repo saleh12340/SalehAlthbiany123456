@@ -49,9 +49,24 @@ jobs:
     - name: Verify Gradle version
       run: gradle --version
 
+    - name: Prepare Gradle Wrapper
+      run: chmod +x gradlew
+
     - name: Build Debug APK
       run: |
         ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
+
+    - name: Verify APK output
+      run: |
+        set -e
+        APK_DIR="app/build/outputs/apk/debug"
+        APK_COUNT=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | wc -l)
+        if [ "$APK_COUNT" -eq 0 ]; then
+          echo "ERROR: No APK was generated in $APK_DIR"
+          exit 1
+        fi
+        echo "APK files generated:"
+        find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' -print -exec ls -lh {} \;
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
