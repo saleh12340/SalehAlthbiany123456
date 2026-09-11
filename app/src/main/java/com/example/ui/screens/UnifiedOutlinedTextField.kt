@@ -18,11 +18,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.example.util.Formatters
 
 /**
- * Unified input used by every application screen.
- * It forces Arabic RTL rendering, keeps the cursor/selection correct,
- * centers bold text, and selects existing text on first focus.
+ * Single input implementation used throughout the application.
+ * The Arabic UI stays RTL, but numeric characters are always English 0-9.
+ * The TextFieldValue is intentionally remembered without using `value` as
+ * the remember key; otherwise every typed character recreates the value and
+ * resets the cursor/selection, which causes Arabic text to be entered in the
+ * wrong direction.
  */
 @Composable
 fun UnifiedOutlinedTextField(
@@ -54,11 +58,20 @@ fun UnifiedOutlinedTextField(
         cursorColor = Color(0xFF0E6B38)
     )
 ) {
-    var fieldValue by remember(value) { mutableStateOf(TextFieldValue(value)) }
+    val normalizedValue = remember(value) { Formatters.englishDigits(value) }
+    var fieldValue by remember { mutableStateOf(TextFieldValue(normalizedValue)) }
+    var wasFocused by remember { mutableStateOf(false) }
 
-    LaunchedEffect(value) {
-        if (fieldValue.text != value) {
-            fieldValue = TextFieldValue(value)
+    // Synchronize only when the parent really changes the text externally.
+    // Do not recreate TextFieldValue on every keystroke: that destroys the
+    // IME-provided cursor position and is the source of the previous bug.
+    LaunchedEffect(normalizedValue) {
+        if (fieldValue.text != normalizedValue) {
+            val safeSelection = fieldValue.selection.end.coerceIn(0, normalizedValue.length)
+            fieldValue = TextFieldValue(
+                text = normalizedValue,
+                selection = TextRange(safeSelection)
+            )
         }
     }
 
@@ -66,14 +79,28 @@ fun UnifiedOutlinedTextField(
         OutlinedTextField(
             value = fieldValue,
             onValueChange = { next ->
-                fieldValue = next
-                onValueChange(next.text)
+                val normalizedText = Formatters.englishDigits(next.text)
+                val delta = normalizedText.length - next.text.length
+                val normalizedSelection = TextRange(
+                    (next.selection.start + delta).coerceIn(0, normalizedText.length),
+                    (next.selection.end + delta).coerceIn(0, normalizedText.length)
+                )
+                fieldValue = next.copy(
+                    text = normalizedText,
+                    selection = normalizedSelection
+                )
+                onValueChange(normalizedText)
             },
             modifier = modifier.onFocusChanged { state ->
-                if (state.isFocused && fieldValue.text.isNotEmpty()) {
-                    fieldValue = fieldValue.copy(
-                        selection = TextRange(0, fieldValue.text.length)
-                    )
+                if (state.isFocused && !wasFocused) {
+                    wasFocused = true
+                    if (fieldValue.text.isNotEmpty()) {
+                        fieldValue = fieldValue.copy(
+                            selection = TextRange(0, fieldValue.text.length)
+                        )
+                    }
+                } else if (!state.isFocused) {
+                    wasFocused = false
                 }
             },
             enabled = enabled,
