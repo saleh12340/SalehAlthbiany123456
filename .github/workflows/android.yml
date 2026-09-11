@@ -44,19 +44,19 @@ jobs:
           import re
           root = Path('app/src/main/java/com/example/ui/screens')
 
-          # All screen inputs use the same compact RTL component.
           for p in root.glob('*.kt'):
               if p.name == 'UnifiedOutlinedTextField.kt':
                   continue
               s = p.read_text(encoding='utf-8')
               if 'OutlinedTextField(' in s:
                   s = s.replace('OutlinedTextField(', 'UnifiedOutlinedTextField(')
-                  p.write_text(s, encoding='utf-8')
+              p.write_text(s, encoding='utf-8')
 
-          # Invoice and purchase item entry: one horizontal RTL row.
           for name in ('CreateInvoiceScreen.kt', 'PurchasesScreen.kt'):
               p = root / name
               s = p.read_text(encoding='utf-8')
+              if 'import androidx.compose.runtime.CompositionLocalProvider' not in s:
+                  s = s.replace('import androidx.compose.runtime.*\n', 'import androidx.compose.runtime.*\nimport androidx.compose.runtime.CompositionLocalProvider\n')
               if 'import androidx.compose.ui.platform.LocalLayoutDirection' not in s:
                   s = s.replace('import androidx.compose.ui.platform.LocalContext\n', 'import androidx.compose.ui.platform.LocalContext\nimport androidx.compose.ui.platform.LocalLayoutDirection\n')
               if 'import androidx.compose.ui.unit.LayoutDirection' not in s:
@@ -91,7 +91,7 @@ jobs:
 
           p = root / 'PurchasesScreen.kt'
           s = p.read_text(encoding='utf-8')
-          pat = re.compile(r'(\s+Text\("إضافة صنف للمشتريات",[^\n]*\n)(.*?)(\s+Row\(Modifier\.fillMaxWidth\(\)\.background\(Color\(0xFFF0F4F1\))', re.S)
+          pat = re.compile(r'(\s+Text\("إضافة صنف للمشتريات",[^\n]*\n)(.*?)(\s+Row\(Modifier\.fillMaxWidth\(\)\.background\(Color\(0xFFF0F4F1\)\.padding\(8\.dp\),)', re.S)
           new = r'''\1                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
               Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                   UnifiedOutlinedTextField(value = totalText, onValueChange = { totalText = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("purchase_total_input"))
@@ -107,7 +107,7 @@ jobs:
                   }
               }
           }
-          Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)'''
+          Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)).padding(8.dp),'''
           s, n = pat.subn(new, s, count=1)
           if n != 1:
               raise SystemExit(f'PurchasesScreen item-row replacement failed: {n}')
