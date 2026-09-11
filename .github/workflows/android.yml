@@ -31,7 +31,7 @@ jobs:
       run: |
         set -e
         if [ -f debug.keystore.base64 ]; then
-          base64 -d debug.keystore.base64 > debug.keystore
+          base64 -d -i debug.keystore.base64 > debug.keystore
         else
           echo "ERROR: Stable debug keystore is missing."
           exit 1
@@ -68,27 +68,33 @@ jobs:
         cat > app/src/main/java/com/example/ui/screens/UnifiedOutlinedTextField.kt <<'KOTLIN'
 package com.example.ui.screens
 
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.CompositionLocalProvider
 
 @Composable
@@ -99,13 +105,13 @@ fun UnifiedOutlinedTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     textStyle: TextStyle = LocalTextStyle.current,
-    label: (@Composable () -> Unit)? = null,
-    placeholder: (@Composable () -> Unit)? = null,
-    leadingIcon: (@Composable () -> Unit)? = null,
-    trailingIcon: (@Composable () -> Unit)? = null,
-    prefix: (@Composable () -> Unit)? = null,
-    suffix: (@Composable () -> Unit)? = null,
-    supportingText: (@Composable () -> Unit)? = null,
+    label: (@Composable (() -> Unit))? = null,
+    placeholder: (@Composable (() -> Unit))? = null,
+    leadingIcon: (@Composable (() -> Unit))? = null,
+    trailingIcon: (@Composable (() -> Unit))? = null,
+    prefix: (@Composable (() -> Unit))? = null,
+    suffix: (@Composable (() -> Unit))? = null,
+    supportingText: (@Composable (() -> Unit))? = null,
     isError: Boolean = false,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
@@ -121,13 +127,14 @@ fun UnifiedOutlinedTextField(
         focusedBorderColor = Color(0xFF0E6B38),
         unfocusedBorderColor = Color(0xFFD5DAD7),
         cursorColor = Color(0xFF0E6B38)
-    ),
-    contentPadding: PaddingValues = OutlinedTextFieldDefaults.contentPaddingWithoutLabel(
-        start = 10.dp, top = 6.dp, end = 10.dp, bottom = 6.dp
     )
 ) {
-    var fieldValue by remember(value) {
-        mutableStateOf(TextFieldValue(value))
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+
+    LaunchedEffect(value) {
+        if (value != fieldValue.text) {
+            fieldValue = TextFieldValue(value)
+        }
     }
 
     val unifiedStyle = textStyle.merge(
@@ -141,9 +148,9 @@ fun UnifiedOutlinedTextField(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         OutlinedTextField(
             value = fieldValue,
-            onValueChange = {
-                fieldValue = it
-                onValueChange(it.text)
+            onValueChange = { newValue ->
+                fieldValue = newValue
+                onValueChange(newValue.text)
             },
             modifier = modifier
                 .heightIn(min = 48.dp)
@@ -173,11 +180,13 @@ fun UnifiedOutlinedTextField(
             minLines = minLines,
             interactionSource = interactionSource,
             shape = shape,
-            colors = colors,
-            contentPadding = contentPadding
+            colors = colors
         )
     }
 }
+
+private val LocalTextStyle
+    get() = androidx.compose.material3.LocalTextStyle.current
 KOTLIN
 
         python3 - <<'PY'
@@ -192,7 +201,6 @@ for path in root.glob('*.kt'):
     if updated != text:
         path.write_text(updated, encoding='utf-8')
 PY
-
         echo "Unified RTL input behavior applied to all screen Kotlin files."
 
     - name: Build Debug APK
