@@ -27,4 +27,14 @@ data class PurchaseInvoiceItem(
     val unitPrice: Double,
     val subtotal: Double,
     val unit: String = "حبة"
-)
+) {
+    /** Compatibility constructor for purchase-entry screens that create items before the invoice ID exists. */
+    constructor(
+        id: Long,
+        productId: Long?,
+        productName: String,
+        quantity: Double,
+        unitPrice: Double,
+        subtotal: Double
+    ) : this(id, 0L, productId, productName, quantity, unitPrice, subtotal, "حبة")
+}
