@@ -37,18 +37,8 @@ jobs:
       - name: Prepare Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Apply unified RTL input fields
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          root = Path('app/src/main/java/com/example/ui/screens')
-          for p in root.glob('*.kt'):
-              if p.name == 'UnifiedOutlinedTextField.kt':
-                  continue
-              s = p.read_text(encoding='utf-8')
-              s = s.replace('OutlinedTextField(', 'UnifiedOutlinedTextField(')
-              p.write_text(s, encoding='utf-8')
-          PY
+      - name: Apply final Arabic input layout
+        run: python3 scripts/apply_ui_layout.py
 
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
