@@ -49,24 +49,84 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
         var notes by remember { mutableStateOf(editing?.notes ?: "") }
         AlertDialog(
             onDismissRequest = { showAddEdit = false },
-            title = { Text(if (editing == null) "إضافة عميل جديد" else "تعديل بيانات العميل") },
+            title = { Text(if (editing == null) "إضافة عميل جديد" else "تعديل بيانات العميل", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(name, { name = it }, label = { Text("اسم العميل *") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("cust_name_input"))
-                    OutlinedTextField(phone, { phone = it }, label = { Text("رقم الهاتف") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(address, { address = it }, label = { Text("العنوان / الحي") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    if (editing == null) OutlinedTextField(balance, { balance = it }, label = { Text("الرصيد السابق") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0E6B38)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    label = { Text("اسم العميل *") },
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.weight(1.25f).testTag("cust_name_input")
+                                )
+                                OutlinedTextField(
+                                    value = phone,
+                                    onValueChange = { phone = it },
+                                    label = { Text("رقم الهاتف") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            OutlinedTextField(
+                                value = address,
+                                onValueChange = { address = it },
+                                label = { Text("العنوان / الحي") },
+                                singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (editing == null) {
+                                OutlinedTextField(
+                                    value = balance,
+                                    onValueChange = { balance = it },
+                                    label = { Text("الرصيد السابق") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("ملاحظات") },
+                                singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (name.isBlank()) { Toast.makeText(context, "يرجى إدخال اسم العميل", Toast.LENGTH_SHORT).show(); return@Button }
-                    val opening = balance.toDoubleOrNull() ?: 0.0
-                    val customer = editing?.copy(name = name.trim(), phone = phone.trim(), address = address.trim(), notes = notes.trim())
-                        ?: Customer(name = name.trim(), phone = phone.trim(), address = address.trim(), balance = opening, notes = notes.trim())
-                    viewModel.saveCustomer(customer) { showAddEdit = false; Toast.makeText(context, "تم حفظ العميل", Toast.LENGTH_SHORT).show() }
-                }) { Text("حفظ") }
+                Button(
+                    onClick = {
+                        if (name.isBlank()) { Toast.makeText(context, "يرجى إدخال اسم العميل", Toast.LENGTH_SHORT).show(); return@Button }
+                        val opening = balance.toDoubleOrNull() ?: 0.0
+                        val customer = editing?.copy(name = name.trim(), phone = phone.trim(), address = address.trim(), notes = notes.trim())
+                            ?: Customer(name = name.trim(), phone = phone.trim(), address = address.trim(), balance = opening, notes = notes.trim())
+                        viewModel.saveCustomer(customer) { showAddEdit = false; Toast.makeText(context, "تم حفظ العميل", Toast.LENGTH_SHORT).show() }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text("حفظ", fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton({ showAddEdit = false }) { Text("إلغاء") } }
         )
