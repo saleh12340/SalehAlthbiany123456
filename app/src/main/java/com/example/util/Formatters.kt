@@ -1,14 +1,47 @@
 package com.example.util
 
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Central formatting rules for the entire application.
+ * Arabic UI remains RTL, while every numeric character is always 0-9.
+ */
 object Formatters {
-    private val decimalFormat = DecimalFormat("#,##0.##")
-    private val currencyFormat = DecimalFormat("#,##0.00")
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.ENGLISH)
+    private val englishSymbols = DecimalFormatSymbols(Locale.US)
+    private val decimalFormat = DecimalFormat("#,##0.##", englishSymbols)
+    private val currencyFormat = DecimalFormat("#,##0.00", englishSymbols)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
+
+    /** Converts Arabic-Indic and Extended Arabic-Indic digits to English digits. */
+    fun englishDigits(value: String): String = value.map { char ->
+        when (char) {
+            '\u0660' -> '0'
+            '\u0661' -> '1'
+            '\u0662' -> '2'
+            '\u0663' -> '3'
+            '\u0664' -> '4'
+            '\u0665' -> '5'
+            '\u0666' -> '6'
+            '\u0667' -> '7'
+            '\u0668' -> '8'
+            '\u0669' -> '9'
+            '\u06F0' -> '0'
+            '\u06F1' -> '1'
+            '\u06F2' -> '2'
+            '\u06F3' -> '3'
+            '\u06F4' -> '4'
+            '\u06F5' -> '5'
+            '\u06F6' -> '6'
+            '\u06F7' -> '7'
+            '\u06F8' -> '8'
+            '\u06F9' -> '9'
+            else -> char
+        }
+    }.joinToString("")
 
     fun formatMoney(amount: Double): String {
         return "${currencyFormat.format(amount)} ر.ي"
@@ -51,8 +84,8 @@ object Formatters {
     }
 
     fun generateInvoiceNumber(prefix: String = "INV", count: Int): String {
-        val timestamp = SimpleDateFormat("yyMMdd", Locale.ENGLISH).format(Date())
-        val numberPart = String.format(Locale.ENGLISH, "%03d", (count % 1000) + 1)
+        val timestamp = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
+        val numberPart = String.format(Locale.US, "%03d", (count % 1000) + 1)
         return "$prefix-$timestamp-$numberPart"
     }
 }
