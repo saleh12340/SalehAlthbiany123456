@@ -12,6 +12,7 @@ import com.example.util.CustomerStatementPrinter
 import com.example.util.EscPosReceiptFormatter
 import com.example.util.Formatters
 import com.example.util.PrinterConnectionState
+import com.example.util.PurchaseReceiptFormatter
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -126,6 +127,8 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     suspend fun getNextSaleInvoiceNumber(): String = Formatters.generateInvoiceNumber("INV", repository.getSaleInvoiceCount())
 
     fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createPurchaseInvoice(invoice, items)) } }
+    fun deletePurchaseInvoice(invoice: PurchaseInvoice, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.deletePurchaseInvoice(invoice); onComplete() } }
+    fun printPurchaseInvoiceThermal(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onResult: (Boolean, String) -> Unit) { viewModelScope.launch { val paperW = if (printerManager.paperSize.value == "80mm") 576 else 384; val bitmap = PurchaseReceiptFormatter.generate(invoice, items, paperW); val success = printerManager.printBitmap(bitmap); onResult(success, if (success) "تمت طباعة فاتورة المورد بنجاح" else "تعذر إرسال أمر الطباعة. تأكد من اتصال الطابعة") } }
     suspend fun getNextPurchaseInvoiceNumber(): String = Formatters.generateInvoiceNumber("PUR", repository.getPurchaseInvoiceCount())
     fun getPurchaseInvoiceItems(invoiceId: Long): Flow<List<PurchaseInvoiceItem>> = repository.getItemsForPurchaseInvoice(invoiceId)
 

@@ -61,7 +61,7 @@ fun ReportsScreen(
             )
 
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(ReportPeriod.values()) { period ->
@@ -117,7 +117,7 @@ fun ReportsScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 MetricStatCard(
                     title = "إجمالي المبيعات",
@@ -139,7 +139,7 @@ fun ReportsScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 MetricStatCard(
                     title = "إجمالي المشتريات",
@@ -161,7 +161,7 @@ fun ReportsScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 MetricStatCard(
                     title = "ديون العملاء الإجمالية (لنا)",

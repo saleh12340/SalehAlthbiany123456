@@ -70,7 +70,7 @@ fun SalesInvoicesScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit,
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
             AppSearchBar(searchQuery, { viewModel.invoiceSearchQuery.value = it }, "بحث برقم الفاتورة أو اسم العميل...", Modifier.padding(vertical = 8.dp), "invoice_search_bar")
             if (invoices.isEmpty()) EmptyStateView("لا توجد فواتير مبيعات", if (searchQuery.isBlank()) "ابدأ بإضافة أول فاتورة" else "لم يتم العثور على نتائج", Icons.Default.ReceiptLong, Modifier.weight(1f))
-            else LazyColumn(Modifier.fillMaxSize().weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)) {
+            else LazyColumn(Modifier.fillMaxSize().weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)) {
                 items(invoices, key = { it.id }) { invoice ->
                     Card(onClick = { selectedInvoice = invoice }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
