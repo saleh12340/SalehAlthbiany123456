@@ -5,17 +5,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -48,31 +47,37 @@ fun UnifiedOutlinedTextField(
         cursorColor = Color(0xFF0E6B38)
     )
 ) {
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier,
-            enabled = enabled,
-            readOnly = readOnly,
-            textStyle = textStyle.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-            label = label,
-            placeholder = placeholder,
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
-            prefix = prefix,
-            suffix = suffix,
-            supportingText = supportingText,
-            isError = isError,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            singleLine = singleLine,
-            maxLines = maxLines,
-            minLines = minLines,
-            interactionSource = interactionSource,
-            shape = shape,
-            colors = colors
-        )
+    var fieldValue by remember(value) { mutableStateOf(TextFieldValue(value)) }
+    LaunchedEffect(value) {
+        if (fieldValue.text != value) fieldValue = TextFieldValue(value)
     }
+    OutlinedTextField(
+        value = fieldValue,
+        onValueChange = { next -> fieldValue = next; onValueChange(next.text) },
+        modifier = modifier.onFocusChanged { state ->
+            if (state.isFocused && fieldValue.text.isNotEmpty()) {
+                fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
+            }
+        },
+        enabled = enabled,
+        readOnly = readOnly,
+        textStyle = textStyle.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+        label = label,
+        placeholder = placeholder,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        prefix = prefix,
+        suffix = suffix,
+        supportingText = supportingText,
+        isError = isError,
+        visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        minLines = minLines,
+        interactionSource = interactionSource,
+        shape = shape,
+        colors = colors
+    )
 }
