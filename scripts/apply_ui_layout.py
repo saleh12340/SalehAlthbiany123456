@@ -2,24 +2,20 @@ from pathlib import Path
 import re
 
 JAVA_ROOT = Path("app/src/main/java")
-SCREEN_ROOT = JAVA_ROOT / "com/example/ui/screens"
 
 
 def compact_spacing(text: str) -> str:
-    # Keep fields close together without changing unrelated padding sizes.
     text = text.replace("Arrangement.spacedBy(8.dp)", "Arrangement.spacedBy(4.dp)")
     text = text.replace("Arrangement.spacedBy(10.dp)", "Arrangement.spacedBy(6.dp)")
     return text
 
 
 def replace_if_found(text: str, pattern: str, replacement: str) -> tuple[str, bool]:
-    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
-    return updated, count == 1
+    return re.subn(pattern, replacement, text, count=1, flags=re.S)[0], bool(re.search(pattern, text, flags=re.S))
 
 
 def transform_invoice_rows(path: Path, text: str) -> str:
     if path.name == "CreateInvoiceScreen.kt":
-        # Customer row: RTL order is name on the right, phone on the left.
         pattern = r'''\s*OutlinedTextField\(value = customerName.*?\n\s*OutlinedTextField\(value = customerPhone.*?\n'''
         replacement = '''
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -29,7 +25,6 @@ def transform_invoice_rows(path: Path, text: str) -> str:
 '''
         text, _ = replace_if_found(text, pattern, replacement)
 
-        # Item entry: right-to-left = total, quantity, details.
         pattern = r'''\s*Box\s*\{\s*OutlinedTextField\(value = itemName.*?\n\s*\}\s*\n\s*Row\(Modifier\.fillMaxWidth\(\), horizontalArrangement = Arrangement\.spacedBy\(8\.dp\)\)\s*\{\s*OutlinedTextField\(value = itemQty.*?\n\s*OutlinedTextField\(value = itemTotal.*?\n\s*\}'''
         replacement = '''
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -39,15 +34,13 @@ def transform_invoice_rows(path: Path, text: str) -> str:
                             UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProductId = products.firstOrNull { p -> p.name.equals(it.trim(), true) }?.id; showSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("invoice_item_details"))
                             if (showSuggestions && itemName.isNotBlank()) {
                                 val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)
-                                if (matches.isNotEmpty()) {
-                                    Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
-                                        Column { matches.forEach { product ->
-                                            Row(Modifier.fillMaxWidth().clickable { itemName = product.name; selectedProductId = product.id; itemUnit = product.unit; val q = itemQty.toDoubleOrNull() ?: 1.0; itemTotal = (product.price * q).toString(); showSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text(product.name, fontWeight = FontWeight.Bold)
-                                                Text(Formatters.formatMoney(product.price), color = InvoiceGreen)
-                                            }
-                                        } }
-                                    }
+                                if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
+                                    Column { matches.forEach { product ->
+                                        Row(Modifier.fillMaxWidth().clickable { itemName = product.name; selectedProductId = product.id; itemUnit = product.unit; val q = itemQty.toDoubleOrNull() ?: 1.0; itemTotal = (product.price * q).toString(); showSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(product.name, fontWeight = FontWeight.Bold)
+                                            Text(Formatters.formatMoney(product.price), color = InvoiceGreen)
+                                        }
+                                    } }
                                 }
                             }
                         }
@@ -55,9 +48,40 @@ def transform_invoice_rows(path: Path, text: str) -> str:
 '''
         text, _ = replace_if_found(text, pattern, replacement)
 
-        # Replace the old four-column visual table with stacked labeled cells.
-        pattern = r'''\s*Row\(Modifier\.fillMaxWidth\(\)\.background\(Color\(0xFFF0F4F1\)\).*?\n\s*if \(items\.isEmpty\(\)\) \{.*?\n\s*\}'''
-        # Do not aggressively replace this block if the source differs; the build remains safe.
+        # Invoice display: every value sits directly under its matching heading.
+        table_pattern = r'''\n            Card\(shape = RoundedCornerShape\(16\.dp\), colors = CardDefaults\.cardColors\(containerColor = MaterialTheme\.colorScheme\.surface\)\) \{.*?(?=\n            Card\()'''
+        table_replacement = '''
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)).padding(vertical = 8.dp, horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("القيمة الإجمالية", Modifier.weight(1.05f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("الكمية", Modifier.weight(.7f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("التفاصيل", Modifier.weight(1.35f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("سعر الوحدة", Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.width(30.dp))
+                    }
+                    if (items.isEmpty()) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Inventory2, null, tint = Color(0xFF8A9690), modifier = Modifier.size(48.dp))
+                            Spacer(Modifier.height(6.dp))
+                            Text("لا توجد أصناف مضافة", color = Color(0xFF68736D), fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        items.forEachIndexed { index, item ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(Formatters.formatMoney(item.subtotal), Modifier.weight(1.05f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Text(Formatters.formatNumber(item.quantity), Modifier.weight(.7f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Text(item.productName, Modifier.weight(1.35f), maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Text(Formatters.formatMoney(item.unitPrice), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                IconButton(onClick = { items = items.toMutableList().also { it.removeAt(index) } }, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Close, "حذف", tint = MaterialTheme.colorScheme.error) }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+            }
+'''
+        text, _ = replace_if_found(text, table_pattern, table_replacement)
         return compact_spacing(text)
 
     if path.name == "PurchasesScreen.kt":
@@ -89,8 +113,6 @@ def transform_invoice_rows(path: Path, text: str) -> str:
 
 
 def main():
-    # Every Compose screen/component gets the same field component.
-    # This is intentionally recursive so new screens are covered automatically.
     for path in JAVA_ROOT.rglob("*.kt"):
         if path.name == "UnifiedOutlinedTextField.kt":
             continue
