@@ -65,7 +65,7 @@ fun PurchasesScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
 
         fun addPurchaseItem() {
             if (itemName.isBlank() || total <= 0 || qty <= 0) { Toast.makeText(context, "أدخل التفاصيل والعدد والقيمة الإجمالية للصنف", Toast.LENGTH_SHORT).show(); return }
-            val newItem = PurchaseInvoiceItem(0, selectedProduct?.id, itemName.trim(), qty, unit, total)
+            val newItem = PurchaseInvoiceItem(id = 0L, invoiceId = 0L, productId = selectedProduct?.id, productName = itemName.trim(), quantity = qty, unitPrice = unit, subtotal = total)
             val existing = purchaseItems.indexOfFirst { it.productName.equals(itemName.trim(), true) && it.productId == selectedProduct?.id }
             purchaseItems = if (existing >= 0) purchaseItems.toMutableList().also { list ->
                 val old = list[existing]; val q = old.quantity + qty; list[existing] = old.copy(quantity = q, subtotal = old.subtotal + total, unitPrice = (old.subtotal + total) / q)
