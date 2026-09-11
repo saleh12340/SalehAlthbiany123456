@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 
 JAVA_ROOT = Path("app/src/main/java")
+UNIFIED_IMPORT = "import com.example.ui.screens.UnifiedOutlinedTextField"
 
 
 def compact_spacing(text: str) -> str:
@@ -11,7 +12,18 @@ def compact_spacing(text: str) -> str:
 
 
 def replace_if_found(text: str, pattern: str, replacement: str) -> tuple[str, bool]:
-    return re.subn(pattern, replacement, text, count=1, flags=re.S)[0], bool(re.search(pattern, text, flags=re.S))
+    new_text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+    return new_text, count > 0
+
+
+def add_unified_import(text: str) -> str:
+    if "UnifiedOutlinedTextField(" not in text or UNIFIED_IMPORT in text:
+        return text
+    # Insert after the package declaration so every patched Kotlin file resolves the shared component.
+    m = re.search(r"^package[^\n]*\n", text, flags=re.M)
+    if m:
+        return text[:m.end()] + "\n" + UNIFIED_IMPORT + "\n" + text[m.end():]
+    return UNIFIED_IMPORT + "\n" + text
 
 
 def transform_invoice_rows(path: Path, text: str) -> str:
@@ -29,59 +41,14 @@ def transform_invoice_rows(path: Path, text: str) -> str:
         replacement = '''
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         UnifiedOutlinedTextField(value = itemTotal, onValueChange = { itemTotal = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("invoice_item_total"))
-                        UnifiedOutlinedTextField(value = itemQty, onValueChange = { itemQty = it; val q = it.toDoubleOrNull(); if (q != null && selectedProductId != null) { val p = products.firstOrNull { product -> product.id == selectedProductId }; if (p != null) itemTotal = (p.price * q).toString() } }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("invoice_item_quantity"))
+                        UnifiedOutlinedTextField(value = itemQty, onValueChange = { itemQty = it }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("invoice_item_quantity"))
                         Box(Modifier.weight(1.8f)) {
                             UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProductId = products.firstOrNull { p -> p.name.equals(it.trim(), true) }?.id; showSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("invoice_item_details"))
-                            if (showSuggestions && itemName.isNotBlank()) {
-                                val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)
-                                if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
-                                    Column { matches.forEach { product ->
-                                        Row(Modifier.fillMaxWidth().clickable { itemName = product.name; selectedProductId = product.id; itemUnit = product.unit; val q = itemQty.toDoubleOrNull() ?: 1.0; itemTotal = (product.price * q).toString(); showSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text(product.name, fontWeight = FontWeight.Bold)
-                                            Text(Formatters.formatMoney(product.price), color = InvoiceGreen)
-                                        }
-                                    } }
-                                }
-                            }
                         }
                     }
 '''
         text, _ = replace_if_found(text, pattern, replacement)
 
-        # Invoice display: every value sits directly under its matching heading.
-        table_pattern = r'''\n            Card\(shape = RoundedCornerShape\(16\.dp\), colors = CardDefaults\.cardColors\(containerColor = MaterialTheme\.colorScheme\.surface\)\) \{.*?(?=\n            Card\()'''
-        table_replacement = '''
-            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)).padding(vertical = 8.dp, horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("القيمة الإجمالية", Modifier.weight(1.05f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text("الكمية", Modifier.weight(.7f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text("التفاصيل", Modifier.weight(1.35f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text("سعر الوحدة", Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(Modifier.width(30.dp))
-                    }
-                    if (items.isEmpty()) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Inventory2, null, tint = Color(0xFF8A9690), modifier = Modifier.size(48.dp))
-                            Spacer(Modifier.height(6.dp))
-                            Text("لا توجد أصناف مضافة", color = Color(0xFF68736D), fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        items.forEachIndexed { index, item ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(Formatters.formatMoney(item.subtotal), Modifier.weight(1.05f), fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                Text(Formatters.formatNumber(item.quantity), Modifier.weight(.7f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                Text(item.productName, Modifier.weight(1.35f), maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                Text(Formatters.formatMoney(item.unitPrice), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                IconButton(onClick = { items = items.toMutableList().also { it.removeAt(index) } }, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Close, "حذف", tint = MaterialTheme.colorScheme.error) }
-                            }
-                            Divider()
-                        }
-                    }
-                }
-            }
-'''
-        text, _ = replace_if_found(text, table_pattern, table_replacement)
         return compact_spacing(text)
 
     if path.name == "PurchasesScreen.kt":
@@ -91,18 +58,7 @@ def transform_invoice_rows(path: Path, text: str) -> str:
                                 UnifiedOutlinedTextField(value = totalText, onValueChange = { totalText = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("purchase_total_input"))
                                 UnifiedOutlinedTextField(value = qtyText, onValueChange = { qtyText = it }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("purchase_quantity_input"))
                                 Box(Modifier.weight(1.8f)) {
-                                    UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProduct = products.firstOrNull { p -> p.name.equals(it.trim(), true) }; showProductSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("purchase_product_input"))
-                                    if (showProductSuggestions && itemName.isNotBlank()) {
-                                        val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)
-                                        if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
-                                            Column { matches.forEach { p ->
-                                                Row(Modifier.fillMaxWidth().clickable { selectedProduct = p; itemName = p.name; val q = qtyText.toDoubleOrNull() ?: 1.0; totalText = (p.costPrice.takeIf { it > 0 } ?: p.price).let { it * q }.toString(); showProductSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                    Text(p.name, fontWeight = FontWeight.Bold)
-                                                    Text("مخزون ${Formatters.formatNumber(p.quantity)}")
-                                                }
-                                            } }
-                                        }
-                                    }
+                                    UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("purchase_product_input"))
                                 }
                             }
 '''
@@ -117,8 +73,11 @@ def main():
         if path.name == "UnifiedOutlinedTextField.kt":
             continue
         text = path.read_text(encoding="utf-8")
-        text = text.replace("OutlinedTextField(", "UnifiedOutlinedTextField(")
+        # Apply screen-specific transformations while the original OutlinedTextField calls are still present.
         text = transform_invoice_rows(path, text)
+        # Then convert remaining standard fields to the shared RTL/selection-aware component.
+        text = text.replace("OutlinedTextField(", "UnifiedOutlinedTextField(")
+        text = add_unified_import(text)
         path.write_text(text, encoding="utf-8")
 
 
