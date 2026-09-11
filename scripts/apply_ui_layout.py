@@ -3,6 +3,7 @@ import re
 
 JAVA_ROOT = Path("app/src/main/java")
 UNIFIED_IMPORT = "import com.example.ui.screens.UnifiedOutlinedTextField"
+TEXT_DIRECTION_IMPORT = "import androidx.compose.ui.text.style.TextDirection"
 
 
 def compact_spacing(text: str) -> str:
@@ -16,13 +17,30 @@ def replace_if_found(text: str, pattern: str, replacement: str) -> tuple[str, bo
     return new_text, count > 0
 
 
-def add_unified_import(text: str) -> str:
-    if "UnifiedOutlinedTextField(" not in text or UNIFIED_IMPORT in text:
+def add_import(text: str, import_line: str) -> str:
+    if import_line in text:
         return text
     m = re.search(r"^package[^\n]*\n", text, flags=re.M)
     if m:
-        return text[:m.end()] + "\n" + UNIFIED_IMPORT + "\n" + text[m.end():]
-    return UNIFIED_IMPORT + "\n" + text
+        return text[:m.end()] + "\n" + import_line + "\n" + text[m.end():]
+    return import_line + "\n" + text
+
+
+def add_unified_import(text: str) -> str:
+    if "UnifiedOutlinedTextField(" not in text:
+        return text
+    return add_import(text, UNIFIED_IMPORT)
+
+
+def harden_unified_field(path: Path, text: str) -> str:
+    if path.name != "UnifiedOutlinedTextField.kt":
+        return text
+    text = add_import(text, TEXT_DIRECTION_IMPORT)
+    text = text.replace(
+        "textAlign = TextAlign.Center\n            )",
+        "textAlign = TextAlign.Center,\n                textDirection = TextDirection.ContentOrRtl\n            )"
+    )
+    return text
 
 
 def transform_invoice_rows(path: Path, text: str) -> str:
@@ -68,15 +86,30 @@ def transform_invoice_rows(path: Path, text: str) -> str:
 
 def main():
     for path in JAVA_ROOT.rglob("*.kt"):
-        if path.name == "UnifiedOutlinedTextField.kt":
-            continue
         text = path.read_text(encoding="utf-8")
         # Screen-specific transformations must run before the global conversion.
-        text = transform_invoice_rows(path, text)
-        # Replace only the standalone Material field call; never touch UnifiedOutlinedTextField itself.
-        text = re.sub(r"(?<![A-Za-z0-9_])OutlinedTextField\(", "UnifiedOutlinedTextField(", text)
-        text = add_unified_import(text)
+        if path.name != "UnifiedOutlinedTextField.kt":
+            text = transform_invoice_rows(path, text)
+            # Replace standalone Material text fields globally. This covers every screen,
+            # including dialogs/forms, rather than only the invoice screens.
+            text = re.sub(r"(?<![A-Za-z0-9_])OutlinedTextField\(", "UnifiedOutlinedTextField(", text)
+            text = re.sub(r"(?<![A-Za-z0-9_])TextField\(", "UnifiedOutlinedTextField(", text)
+            text = add_unified_import(text)
+        text = harden_unified_field(path, text)
         path.write_text(text, encoding="utf-8")
+
+    # Fail the CI build instead of silently producing an APK with unconverted fields.
+    remaining = []
+    for path in JAVA_ROOT.rglob("*.kt"):
+        if path.name == "UnifiedOutlinedTextField.kt":
+            continue
+        content = path.read_text(encoding="utf-8")
+        if re.search(r"(?<![A-Za-z0-9_])OutlinedTextField\(", content):
+            remaining.append(str(path))
+        if re.search(r"(?<![A-Za-z0-9_])TextField\(", content):
+            remaining.append(str(path))
+    if remaining:
+        raise RuntimeError("Global RTL input conversion incomplete: " + ", ".join(remaining))
 
 
 if __name__ == "__main__":
