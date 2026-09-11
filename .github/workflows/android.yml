@@ -37,8 +37,11 @@ jobs:
       - name: Prepare Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Apply final Arabic input layout
+      - name: Apply unified Arabic UI and RTL layout
         run: python3 scripts/apply_ui_layout.py
+
+      - name: Apply WhatsApp image and customer linking share patch
+        run: python3 scripts/apply_sharing_patch.py
 
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
