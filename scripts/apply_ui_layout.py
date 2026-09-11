@@ -19,7 +19,6 @@ def replace_if_found(text: str, pattern: str, replacement: str) -> tuple[str, bo
 def add_unified_import(text: str) -> str:
     if "UnifiedOutlinedTextField(" not in text or UNIFIED_IMPORT in text:
         return text
-    # Insert after the package declaration so every patched Kotlin file resolves the shared component.
     m = re.search(r"^package[^\n]*\n", text, flags=re.M)
     if m:
         return text[:m.end()] + "\n" + UNIFIED_IMPORT + "\n" + text[m.end():]
@@ -48,7 +47,6 @@ def transform_invoice_rows(path: Path, text: str) -> str:
                     }
 '''
         text, _ = replace_if_found(text, pattern, replacement)
-
         return compact_spacing(text)
 
     if path.name == "PurchasesScreen.kt":
@@ -73,10 +71,10 @@ def main():
         if path.name == "UnifiedOutlinedTextField.kt":
             continue
         text = path.read_text(encoding="utf-8")
-        # Apply screen-specific transformations while the original OutlinedTextField calls are still present.
+        # Screen-specific transformations must run before the global conversion.
         text = transform_invoice_rows(path, text)
-        # Then convert remaining standard fields to the shared RTL/selection-aware component.
-        text = text.replace("OutlinedTextField(", "UnifiedOutlinedTextField(")
+        # Replace only the standalone Material field call; never touch UnifiedOutlinedTextField itself.
+        text = re.sub(r"(?<![A-Za-z0-9_])OutlinedTextField\(", "UnifiedOutlinedTextField(", text)
         text = add_unified_import(text)
         path.write_text(text, encoding="utf-8")
 
