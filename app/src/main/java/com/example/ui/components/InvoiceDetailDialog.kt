@@ -23,6 +23,7 @@ import com.example.data.local.entities.SaleInvoiceItem
 import com.example.ui.viewmodel.GroceryViewModel
 import com.example.util.Formatters
 import com.example.util.PdfReceiptGenerator
+import com.example.util.ReceiptShareHelper
 
 @Composable
 fun InvoiceDetailDialog(
@@ -91,7 +92,7 @@ fun InvoiceDetailDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // Customer & Payment Info
                 Surface(
@@ -207,11 +208,11 @@ fun InvoiceDetailDialog(
         confirmButton = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Thermal Bluetooth Print
                     Button(
@@ -255,7 +256,7 @@ fun InvoiceDetailDialog(
                 // WhatsApp text share & close
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     TextButton(
                         onClick = {
@@ -275,7 +276,7 @@ fun InvoiceDetailDialog(
                                 appendLine("المتبقي: ${Formatters.formatMoney(invoice.remainingAmount)}")
                                 appendLine("شكراً لتعاملكم معنا")
                             }
-                            PdfReceiptGenerator.shareText(context, msg, "مشاركة الفاتورة عبر واتساب")
+                            ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice, items)
                         },
                         modifier = Modifier.weight(1f)
                     ) {

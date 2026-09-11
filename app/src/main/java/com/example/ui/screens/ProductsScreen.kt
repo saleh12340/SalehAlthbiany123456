@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.screens.UnifiedOutlinedTextField
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -65,9 +67,9 @@ fun ProductsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("اسم المنتج *") },
@@ -75,15 +77,15 @@ fun ProductsScreen(
                         modifier = Modifier.fillMaxWidth().testTag("product_name_input")
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        UnifiedOutlinedTextField(
                             value = barcode,
                             onValueChange = { barcode = it },
                             label = { Text("الباركود (اختياري)") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
-                        OutlinedTextField(
+                        UnifiedOutlinedTextField(
                             value = unit,
                             onValueChange = { unit = it },
                             label = { Text("الوحدة") },
@@ -93,8 +95,8 @@ fun ProductsScreen(
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        UnifiedOutlinedTextField(
                             value = priceText,
                             onValueChange = { priceText = it },
                             label = { Text("سعر البيع *") },
@@ -102,7 +104,7 @@ fun ProductsScreen(
                             singleLine = true,
                             modifier = Modifier.weight(1f).testTag("product_price_input")
                         )
-                        OutlinedTextField(
+                        UnifiedOutlinedTextField(
                             value = costPriceText,
                             onValueChange = { costPriceText = it },
                             label = { Text("سعر التكلفة") },
@@ -112,8 +114,8 @@ fun ProductsScreen(
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        UnifiedOutlinedTextField(
                             value = quantityText,
                             onValueChange = { quantityText = it },
                             label = { Text("الكمية المتوفرة *") },
@@ -121,7 +123,7 @@ fun ProductsScreen(
                             singleLine = true,
                             modifier = Modifier.weight(1f).testTag("product_qty_input")
                         )
-                        OutlinedTextField(
+                        UnifiedOutlinedTextField(
                             value = minStockText,
                             onValueChange = { minStockText = it },
                             label = { Text("حد التنبيه الأدنى") },
@@ -273,7 +275,7 @@ fun ProductsScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
                 ) {
                     items(products, key = { it.id }) { product ->
@@ -289,7 +291,7 @@ fun ProductsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),

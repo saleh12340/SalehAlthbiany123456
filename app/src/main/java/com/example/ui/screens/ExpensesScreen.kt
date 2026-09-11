@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.screens.UnifiedOutlinedTextField
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -51,8 +53,8 @@ fun ExpensesScreen(
             onDismissRequest = { showAddEditDialog = false },
             title = { Text(if (editingExpense == null) "إضافة مصروف جديد" else "تعديل المصروف") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    UnifiedOutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
                         label = { Text("بيان المصروف *") },
@@ -61,7 +63,7 @@ fun ExpensesScreen(
                         modifier = Modifier.fillMaxWidth().testTag("expense_title_input")
                     )
 
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
                         label = { Text("المبلغ (ر.ي) *") },
@@ -70,7 +72,7 @@ fun ExpensesScreen(
                         modifier = Modifier.fillMaxWidth().testTag("expense_amount_input")
                     )
 
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = category,
                         onValueChange = { category = it },
                         label = { Text("التصنيف") },
@@ -78,7 +80,7 @@ fun ExpensesScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
                         label = { Text("ملاحظات إضافية") },
@@ -241,7 +243,7 @@ fun ExpensesScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
                 ) {
                     items(expenses, key = { it.id }) { expense ->
@@ -273,7 +275,7 @@ fun ExpensesScreen(
 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
                                         text = Formatters.formatMoney(expense.amount),

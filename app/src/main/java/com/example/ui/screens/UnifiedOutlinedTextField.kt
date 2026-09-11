@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.text.style.TextDirection
+
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -107,7 +109,8 @@ fun UnifiedOutlinedTextField(
             readOnly = readOnly,
             textStyle = textStyle.copy(
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                textDirection = TextDirection.ContentOrRtl
             ),
             label = label,
             placeholder = placeholder,

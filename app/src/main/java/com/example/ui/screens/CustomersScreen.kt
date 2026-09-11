@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.screens.UnifiedOutlinedTextField
+
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +27,7 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.viewmodel.GroceryViewModel
 import com.example.util.Formatters
 import com.example.util.PdfReceiptGenerator
+import com.example.util.ReceiptShareHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,14 +62,14 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                 ) {
                     Column(
                         modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                OutlinedTextField(
+                                UnifiedOutlinedTextField(
                                     value = name,
                                     onValueChange = { name = it },
                                     label = { Text("اسم العميل *") },
@@ -74,7 +77,7 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                     textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
                                     modifier = Modifier.weight(1.25f).testTag("cust_name_input")
                                 )
-                                OutlinedTextField(
+                                UnifiedOutlinedTextField(
                                     value = phone,
                                     onValueChange = { phone = it },
                                     label = { Text("رقم الهاتف") },
@@ -84,7 +87,7 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                     modifier = Modifier.weight(1f)
                                 )
                             }
-                            OutlinedTextField(
+                            UnifiedOutlinedTextField(
                                 value = address,
                                 onValueChange = { address = it },
                                 label = { Text("العنوان / الحي") },
@@ -93,7 +96,7 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                             if (editing == null) {
-                                OutlinedTextField(
+                                UnifiedOutlinedTextField(
                                     value = balance,
                                     onValueChange = { balance = it },
                                     label = { Text("الرصيد السابق") },
@@ -103,7 +106,7 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
-                            OutlinedTextField(
+                            UnifiedOutlinedTextField(
                                 value = notes,
                                 onValueChange = { notes = it },
                                 label = { Text("ملاحظات") },
@@ -139,11 +142,11 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
             onDismissRequest = { paymentCustomer = null },
             title = { Text("سند قبض / دفعة") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("العميل: ${customer.name}", fontWeight = FontWeight.Bold)
                     Text("الرصيد الحالي: ${Formatters.formatMoney(customer.balance)}", color = MaterialTheme.colorScheme.error)
-                    OutlinedTextField(amount, { amount = it }, label = { Text("المبلغ المقبوض *") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth().testTag("payment_amount_input"))
-                    OutlinedTextField(note, { note = it }, label = { Text("البيان") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    UnifiedOutlinedTextField(amount, { amount = it }, label = { Text("المبلغ المقبوض *") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth().testTag("payment_amount_input"))
+                    UnifiedOutlinedTextField(note, { note = it }, label = { Text("البيان") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
@@ -216,12 +219,12 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                             val file = PdfReceiptGenerator.generateCustomerStatementPdf(context, customer, transactions)
                             if (file != null) PdfReceiptGenerator.sharePdf(context, file, "كشف حساب ${customer.name}") else Toast.makeText(context, "تعذر إنشاء PDF", Toast.LENGTH_SHORT).show()
                         }) { Icon(Icons.Default.PictureAsPdf, "تصدير PDF") }
-                        IconButton(onClick = { PdfReceiptGenerator.shareText(context, textStatement, "إرسال كشف الحساب") }) { Icon(Icons.Default.Share, "مشاركة وإرسال") }
+                        IconButton(onClick = { ReceiptShareHelper.shareCustomerStatementToWhatsApp(context, customer, transactions) }) { Icon(Icons.Default.Share, "مشاركة وإرسال") }
                     }
                 }
             },
             text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Card(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("الرصيد الحالي", fontWeight = FontWeight.Bold); Text(Formatters.formatMoney(customer.balance), fontWeight = FontWeight.Bold, color = if (customer.balance > 0) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)) } }
                     Text("الحركات (${transactions.size})", fontWeight = FontWeight.Bold)
                     if (transactions.isEmpty()) Text("لا توجد حركات مسجلة") else LazyColumn(Modifier.fillMaxWidth().weight(1f, false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -231,7 +234,7 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                     Column(Modifier.weight(1f)) {
                                         Text(tx.description, fontWeight = FontWeight.SemiBold)
                                         Text("${tx.date} ${tx.time}", style = MaterialTheme.typography.bodySmall)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             if (tx.amount > 0) Text("فاتورة +${Formatters.formatMoney(tx.amount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                             if (tx.paid > 0) Text("دفعة -${Formatters.formatMoney(tx.paid)}", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
                                         }

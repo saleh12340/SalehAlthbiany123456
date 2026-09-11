@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.screens.UnifiedOutlinedTextField
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,22 +57,22 @@ fun SuppliersScreen(
             onDismissRequest = { showAddEditDialog = false },
             title = { Text(if (editingSupplier == null) "إضافة مورد جديد" else "تعديل بيانات المورد") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    UnifiedOutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("اسم المورد / المندوب *") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("supplier_name_input")
                     )
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = company,
                         onValueChange = { company = it },
                         label = { Text("اسم الشركة / المؤسسة") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = phone,
                         onValueChange = { phone = it },
                         label = { Text("رقم الهاتف") },
@@ -79,7 +81,7 @@ fun SuppliersScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (editingSupplier == null) {
-                        OutlinedTextField(
+                        UnifiedOutlinedTextField(
                             value = initialBalance,
                             onValueChange = { initialBalance = it },
                             label = { Text("الرصيد السابق للمورد (مستحقات سابقة)") },
@@ -137,11 +139,11 @@ fun SuppliersScreen(
             onDismissRequest = { showPaySupplierDialog = null },
             title = { Text("إضافة سند صرف للمورد") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("المورد: ${supplier.name}", fontWeight = FontWeight.Bold)
                     Text("المستحق له: ${Formatters.formatMoney(supplier.balance)}", color = MaterialTheme.colorScheme.error)
 
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = paymentAmountText,
                         onValueChange = { paymentAmountText = it },
                         label = { Text("المبلغ المدفوع للمورد (ر.ي) *") },
@@ -150,7 +152,7 @@ fun SuppliersScreen(
                         modifier = Modifier.fillMaxWidth().testTag("supplier_pay_input")
                     )
 
-                    OutlinedTextField(
+                    UnifiedOutlinedTextField(
                         value = paymentNote,
                         onValueChange = { paymentNote = it },
                         label = { Text("ملاحظة / البيان") },
@@ -204,7 +206,7 @@ fun SuppliersScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -284,7 +286,7 @@ fun SuppliersScreen(
             confirmButton = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Button(
                         onClick = {
@@ -406,7 +408,7 @@ fun SuppliersScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(top = 6.dp, bottom = 80.dp)
                 ) {
                     items(suppliers, key = { it.id }) { supplier ->
@@ -421,7 +423,7 @@ fun SuppliersScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
