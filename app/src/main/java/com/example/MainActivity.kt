@@ -15,6 +15,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,95 +39,99 @@ class MainActivity : ComponentActivity() {
                 // Request Bluetooth runtime permissions if needed
                 RequestBluetoothPermissions()
 
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    val navController = rememberNavController()
+                // The application is Arabic/RTL: enforce RTL at the root so
+                // every screen, dialog, form and input inherits the same direction.
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        val navController = rememberNavController()
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = "splash"
-                    ) {
-                        composable("splash") {
-                            SplashScreen(
-                                onSplashFinished = {
-                                    navController.navigate("home") {
-                                        popUpTo("splash") { inclusive = true }
+                        NavHost(
+                            navController = navController,
+                            startDestination = "splash"
+                        ) {
+                            composable("splash") {
+                                SplashScreen(
+                                    onSplashFinished = {
+                                        navController.navigate("home") {
+                                            popUpTo("splash") { inclusive = true }
+                                        }
                                     }
-                                }
-                            )
-                        }
+                                )
+                            }
 
-                        composable("home") {
-                            HomeScreen(
-                                viewModel = viewModel,
-                                onNavigate = { route -> navController.navigate(route) }
-                            )
-                        }
+                            composable("home") {
+                                HomeScreen(
+                                    viewModel = viewModel,
+                                    onNavigate = { route -> navController.navigate(route) }
+                                )
+                            }
 
-                        composable("sales") {
-                            SalesInvoicesScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() },
-                                onNavigateToCreate = { navController.navigate("create_sale") }
-                            )
-                        }
+                            composable("sales") {
+                                SalesInvoicesScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToCreate = { navController.navigate("create_sale") }
+                                )
+                            }
 
-                        composable("create_sale") {
-                            CreateInvoiceScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() },
-                                onInvoiceCreated = {
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
+                            composable("create_sale") {
+                                CreateInvoiceScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onInvoiceCreated = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            }
 
-                        composable("products") {
-                            ProductsScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("products") {
+                                ProductsScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("customers") {
-                            CustomersScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("customers") {
+                                CustomersScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("purchases") {
-                            PurchasesScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("purchases") {
+                                PurchasesScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("suppliers") {
-                            SuppliersScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("suppliers") {
+                                SuppliersScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("expenses") {
-                            ExpensesScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("expenses") {
+                                ExpensesScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("reports") {
-                            ReportsScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable("reports") {
+                                ReportsScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("settings") {
-                            SettingsScreen(
-                                viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
+                            composable("settings") {
+                                SettingsScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
                         }
                     }
                 }
