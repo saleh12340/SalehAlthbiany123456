@@ -14,44 +14,33 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: gradle
-
       - name: Accept Android SDK Licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
       - name: Restore Environment
         run: |
           if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; elif [ ! -f .env ]; then touch .env; fi
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
-
       - name: Prepare Gradle Wrapper
         run: chmod +x gradlew
-
       - name: Apply unified RTL form UI
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
           root = Path('app/src/main/java/com/example/ui/screens')
-
           for p in root.glob('*.kt'):
-              if p.name == 'UnifiedOutlinedTextField.kt':
-                  continue
-              s = p.read_text(encoding='utf-8')
-              if 'OutlinedTextField(' in s:
-                  s = s.replace('OutlinedTextField(', 'UnifiedOutlinedTextField(')
-              p.write_text(s, encoding='utf-8')
-
+              if p.name != 'UnifiedOutlinedTextField.kt':
+                  s = p.read_text(encoding='utf-8').replace('OutlinedTextField(', 'UnifiedOutlinedTextField(')
+                  p.write_text(s, encoding='utf-8')
           for name in ('CreateInvoiceScreen.kt', 'PurchasesScreen.kt'):
               p = root / name
               s = p.read_text(encoding='utf-8')
@@ -62,22 +51,19 @@ jobs:
               if 'import androidx.compose.ui.unit.LayoutDirection' not in s:
                   s = s.replace('import androidx.compose.ui.unit.dp\n', 'import androidx.compose.ui.unit.LayoutDirection\nimport androidx.compose.ui.unit.dp\n')
               p.write_text(s, encoding='utf-8')
-
           p = root / 'CreateInvoiceScreen.kt'
           s = p.read_text(encoding='utf-8')
           pat = re.compile(r'(\s+Text\("إضافة صنف",[^\n]*\n)(.*?)(\s+Row\(Modifier\.fillMaxWidth\(\), horizontalArrangement = Arrangement\.SpaceBetween, verticalAlignment = Alignment\.CenterVertically\) \{)', re.S)
           new = r'''\1                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
               Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                   UnifiedOutlinedTextField(value = itemTotal, onValueChange = { itemTotal = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("invoice_item_total"))
-                  UnifiedOutlinedTextField(value = itemQty, onValueChange = { itemQty = it; val q = it.toDoubleOrNull(); if (q != null && selectedProductId != null) { val p = products.firstOrNull { product -> product.id == selectedProductId }; if (p != null) itemTotal = (p.price * q).toString() } }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("invoice_item_quantity"))
+                  UnifiedOutlinedTextField(value = itemQty, onValueChange = { itemQty = it; val q = it.toDoubleOrNull(); if (q != null && selectedProductId != null) { val product = products.firstOrNull { product -> product.id == selectedProductId }; if (product != null) itemTotal = (product.price * q).toString() } }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("invoice_item_quantity"))
                   Box(Modifier.weight(1.8f)) {
-                      UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProductId = products.firstOrNull { p -> p.name.equals(it.trim(), true) }?.id; showSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("invoice_item_details"))
+                      UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProductId = products.firstOrNull { product -> product.name.equals(it.trim(), true) }?.id; showSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("invoice_item_details"))
                       if (showSuggestions && itemName.isNotBlank()) {
                           val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)
                           if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
-                              Column { matches.forEach { product ->
-                                  Row(Modifier.fillMaxWidth().clickable { itemName = product.name; selectedProductId = product.id; itemUnit = product.unit; val q = itemQty.toDoubleOrNull() ?: 1.0; itemTotal = (product.price * q).toString(); showSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(product.name, fontWeight = FontWeight.Bold); Text(Formatters.formatMoney(product.price), color = InvoiceGreen) }
-                              } }
+                              Column { matches.forEach { product -> Row(Modifier.fillMaxWidth().clickable { itemName = product.name; selectedProductId = product.id; itemUnit = product.unit; val q = itemQty.toDoubleOrNull() ?: 1.0; itemTotal = (product.price * q).toString(); showSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(product.name, fontWeight = FontWeight.Bold); Text(Formatters.formatMoney(product.price), color = InvoiceGreen) } } }
                           }
                       }
                   }
@@ -85,38 +71,21 @@ jobs:
           }
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {'''
           s, n = pat.subn(new, s, count=1)
-          if n != 1:
-              raise SystemExit(f'CreateInvoiceScreen item-row replacement failed: {n}')
+          if n != 1: raise SystemExit(f'CreateInvoiceScreen item-row replacement failed: {n}')
           p.write_text(s, encoding='utf-8')
-
           p = root / 'PurchasesScreen.kt'
           s = p.read_text(encoding='utf-8')
-          pat = re.compile(r'(\s+Text\("إضافة صنف للمشتريات",[^\n]*\n)(.*?)(\s+Row\(Modifier\.fillMaxWidth\(\)\.background\(Color\(0xFFF0F4F1\)\.padding\(8\.dp\),)', re.S)
-          new = r'''\1                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                  UnifiedOutlinedTextField(value = totalText, onValueChange = { totalText = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("purchase_total_input"))
-                  UnifiedOutlinedTextField(value = qtyText, onValueChange = { qtyText = it }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("purchase_quantity_input"))
-                  Box(Modifier.weight(1.8f)) {
-                      UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProduct = products.firstOrNull { p -> p.name.equals(it.trim(), true) }; showProductSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("purchase_product_input"))
-                      if (showProductSuggestions && itemName.isNotBlank()) {
-                          val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)
-                          if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {
-                              Column { matches.forEach { p -> Row(Modifier.fillMaxWidth().clickable { selectedProduct = p; itemName = p.name; val q = qtyText.toDoubleOrNull() ?: 1.0; totalText = (p.costPrice.takeIf { it > 0 } ?: p.price).let { it * q }.toString(); showProductSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(p.name, fontWeight = FontWeight.Bold); Text("مخزون ${Formatters.formatNumber(p.quantity)}") } } }
-                          }
-                      }
-                  }
-              }
-          }
-          Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)).padding(8.dp),'''
-          s, n = pat.subn(new, s, count=1)
-          if n != 1:
-              raise SystemExit(f'PurchasesScreen item-row replacement failed: {n}')
+          start_marker = '                            Box {\n'
+          end_marker = '                            Row(Modifier.fillMaxWidth().background(Color(0xFFF0F4F1)).padding(8.dp),'
+          start = s.find(start_marker, s.find('Text("إضافة صنف للمشتريات"'))
+          end = s.find(end_marker, start)
+          if start == -1 or end == -1: raise SystemExit(f'PurchasesScreen item area not found: start={start}, end={end}')
+          replacement = '''                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {\n                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {\n                                    UnifiedOutlinedTextField(value = totalText, onValueChange = { totalText = it }, label = { Text("القيمة الإجمالية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1.15f).testTag("purchase_total_input"))\n                                    UnifiedOutlinedTextField(value = qtyText, onValueChange = { qtyText = it }, label = { Text("العدد") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(.72f).testTag("purchase_quantity_input"))\n                                    Box(Modifier.weight(1.8f)) {\n                                        UnifiedOutlinedTextField(value = itemName, onValueChange = { itemName = it; selectedProduct = products.firstOrNull { product -> product.name.equals(it.trim(), true) }; showProductSuggestions = it.isNotBlank() }, label = { Text("التفاصيل") }, placeholder = { Text("اسم الصنف") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("purchase_product_input"))\n                                        if (showProductSuggestions && itemName.isNotBlank()) {\n                                            val matches = products.filter { it.name.contains(itemName.trim(), true) }.take(5)\n                                            if (matches.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(top = 58.dp), shape = RoundedCornerShape(10.dp), tonalElevation = 5.dp) {\n                                                Column { matches.forEach { product -> Row(Modifier.fillMaxWidth().clickable { selectedProduct = product; itemName = product.name; val q = qtyText.toDoubleOrNull() ?: 1.0; totalText = (product.costPrice.takeIf { it > 0 } ?: product.price).let { it * q }.toString(); showProductSuggestions = false }.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(product.name, fontWeight = FontWeight.Bold); Text("مخزون ${Formatters.formatNumber(product.quantity)}") } } }\n                                            }\n                                        }\n                                    }\n                                }\n                            }\n'''
+          s = s[:start] + replacement + s[end:]
           p.write_text(s, encoding='utf-8')
           PY
-
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
-
       - name: Verify APK output
         run: |
           set -e
@@ -125,14 +94,12 @@ jobs:
           test -s "$APK"
           echo "APK generated: $APK"
           ls -lh "$APK"
-
       - name: Verify APK signing
         run: |
           set -e
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose --print-certs "$APK"
-
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
