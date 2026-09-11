@@ -72,6 +72,12 @@ interface GroceryDao {
     @Delete
     suspend fun deleteCustomer(customer: Customer)
 
+    @Query("DELETE FROM customer_transactions WHERE customerId = :customerId")
+    suspend fun deleteCustomerTransactions(customerId: Long)
+
+    @Query("UPDATE sale_invoices SET customerId = NULL, customerName = 'عميل محذوف', customerPhone = '' WHERE customerId = :customerId")
+    suspend fun detachCustomerFromInvoices(customerId: Long)
+
     // ==================== SUPPLIERS ====================
     @Query("SELECT * FROM suppliers ORDER BY name ASC")
     fun getAllSuppliers(): Flow<List<Supplier>>
@@ -140,6 +146,9 @@ interface GroceryDao {
 
     @Query("DELETE FROM sale_invoice_items WHERE invoiceId = :invoiceId")
     suspend fun deleteSaleInvoiceItems(invoiceId: Long)
+
+    @Query("DELETE FROM customer_transactions WHERE invoiceId = :invoiceId")
+    suspend fun deleteCustomerTransactionForInvoice(invoiceId: Long)
 
     // ==================== PURCHASE INVOICES ====================
     @Query("SELECT * FROM purchase_invoices ORDER BY timestamp DESC")
