@@ -563,7 +563,8 @@ object BackupHelper {
         backupData: FullBackupData,
         isDailyAuto: Boolean = false
     ): File = withContext(Dispatchers.IO) {
-        val backupDir = File(context.getExternalFilesDir(null), "backups")
+        val appFolder = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "بقالة_العزي")
+        val backupDir = File(appFolder, "النسخ_الاحتياطية")
         if (!backupDir.exists()) {
             backupDir.mkdirs()
         }

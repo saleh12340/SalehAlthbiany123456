@@ -1,9 +1,15 @@
 package com.example.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -63,6 +69,58 @@ fun CustomersScreen(
     var deleteCustomer by remember { mutableStateOf<Customer?>(null) }
     var filterType by remember { mutableStateOf("الكل") }
 
+    // Add state for bridging the dialog fields and the launchers
+    var importNameBridge by remember { mutableStateOf("") }
+    var importPhoneBridge by remember { mutableStateOf("") }
+
+    val contactPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            try {
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                if (cursor != null && cursor.moveToFirst()) {
+                    val hasPhoneIdx = cursor.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
+                    val nameIdx = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                    
+                    val hasPhone = cursor.getString(hasPhoneIdx).toInt() > 0
+                    val contactName = cursor.getString(nameIdx)
+                    val contactIdIdx = cursor.getColumnIndex(ContactsContract.Contacts._ID)
+                    val contactId = cursor.getString(contactIdIdx)
+                    
+                    importNameBridge = contactName ?: ""
+                    
+                    if (hasPhone) {
+                        val phonesCursor = context.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            null,
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                            arrayOf(contactId),
+                            null
+                        )
+                        if (phonesCursor != null && phonesCursor.moveToFirst()) {
+                            val phoneIdx = phonesCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                            val phoneStr = phonesCursor.getString(phoneIdx)
+                            importPhoneBridge = phoneStr.replace(" ", "").replace("-", "")
+                            phonesCursor.close()
+                        }
+                    } else {
+                        importPhoneBridge = ""
+                    }
+                    cursor.close()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "فشل في قراءة جهة الاتصال", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            contactPickerLauncher.launch(null)
+        } else {
+            Toast.makeText(context, "الصلاحية مطلوبة لاستيراد جهات الاتصال", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val filteredCustomers = remember(customers, searchQuery, filterType) {
         customers.filter { c ->
             val matchesQuery = searchQuery.isBlank() ||
@@ -101,6 +159,17 @@ fun CustomersScreen(
         var address by remember { mutableStateOf(editingCustomer?.address ?: "") }
         var balance by remember { mutableStateOf(if (editingCustomer == null) "0" else editingCustomer!!.balance.toString()) }
         var notes by remember { mutableStateOf(editingCustomer?.notes ?: "") }
+
+        LaunchedEffect(importNameBridge, importPhoneBridge) {
+            if (importNameBridge.isNotEmpty()) {
+                name = importNameBridge
+                importNameBridge = ""
+            }
+            if (importPhoneBridge.isNotEmpty()) {
+                phone = importPhoneBridge
+                importPhoneBridge = ""
+            }
+        }
 
         Dialog(
             onDismissRequest = { showAddEdit = false },
@@ -186,6 +255,22 @@ fun CustomersScreen(
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
+
+                            OutlinedButton(
+                                onClick = {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                                        contactPickerLauncher.launch(null)
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Contacts, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("استيراد العميل ورقمه من جهات الاتصال")
+                            }
 
                             UnifiedOutlinedTextField(
                                 value = address,
@@ -613,6 +698,21 @@ fun CustomersScreen(
                                                                 title = if (isPayment) "سند قبض" else "فاتورة",
                                                                 amount = amountDisplay,
                                                                 currentBalance = txBalance
+                                                            )
+                                                        }
+                                                    )
+                                                    DropdownMenuItem(
+                                                        text = { Text("مشاركة رسالة نصية SMS") },
+                                                        leadingIcon = { Icon(Icons.Default.Message, null, tint = Color(0xFF1E88E5)) },
+                                                        onClick = {
+                                                            expanded = false
+                                                            ReceiptShareHelper.shareTransactionViaSMS(
+                                                                context = context,
+                                                                customerName = customer.name,
+                                                                customerPhone = customer.phone,
+                                                                amount = amountDisplay,
+                                                                currentBalance = txBalance,
+                                                                isReceipt = isPayment
                                                             )
                                                         }
                                                     )

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.os.Environment
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.local.entities.Customer
@@ -196,7 +197,8 @@ object PdfReceiptGenerator {
         pdfDocument.finishPage(page)
 
         return try {
-            val receiptsDir = File(context.cacheDir, "receipts").apply { mkdirs() }
+            val appFolder = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "بقالة_العزي")
+            val receiptsDir = File(appFolder, "الفواتير").apply { mkdirs() }
             val file = File(receiptsDir, "invoice_${invoice.invoiceNumber}.pdf")
             val outputStream = FileOutputStream(file)
             pdfDocument.writeTo(outputStream)
@@ -309,7 +311,9 @@ object PdfReceiptGenerator {
         pdfDocument.finishPage(page)
 
         return try {
-            val file = File(context.cacheDir, "statement_${customer.name.replace(" ", "_")}.pdf")
+            val appFolder = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "بقالة_العزي")
+            val statementsDir = File(appFolder, "كشوفات_الحساب").apply { mkdirs() }
+            val file = File(statementsDir, "statement_${customer.name.replace(" ", "_")}.pdf")
             val outputStream = FileOutputStream(file)
             pdfDocument.writeTo(outputStream)
             outputStream.flush()

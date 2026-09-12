@@ -333,6 +333,21 @@ fun ReportsScreen(
                                                                 }
                                                             }
                                                         )
+                                                        DropdownMenuItem(
+                                                            text = { Text("إرسال رسالة نصية SMS") },
+                                                            leadingIcon = { Icon(Icons.Default.Message, null, tint = Color(0xFF1E88E5)) },
+                                                            onClick = {
+                                                                expanded = false
+                                                                coroutineScope.launch {
+                                                                    val invoice = viewModel.getSaleInvoiceById(tx.referenceId)
+                                                                    val items = viewModel.getInvoiceItemsList(tx.referenceId)
+                                                                    if (invoice != null) {
+                                                                        val customer = viewModel.customers.value.find { it.id == invoice.customerId }
+                                                                        ReceiptShareHelper.shareInvoiceViaSMS(context, invoice, items, customer?.balance)
+                                                                    }
+                                                                }
+                                                            }
+                                                        )
                                                     }
                                                     TransactionReferenceType.PURCHASE_INVOICE -> {
                                                         DropdownMenuItem(
@@ -348,7 +363,7 @@ fun ReportsScreen(
                                                             onClick = {
                                                                 expanded = false
                                                                 coroutineScope.launch {
-                                                                    val customer = viewModel.customers.value.find { it.id == tx.referenceId }
+                                                                    val customer = viewModel.customers.value.find { it.id == tx.referenceId } // Wait, for customer payment, referenceId is customerId
                                                                     if (customer != null) {
                                                                         ReceiptShareHelper.shareTransactionReceiptToWhatsApp(
                                                                             context = context,
@@ -357,6 +372,26 @@ fun ReportsScreen(
                                                                             title = "سند قبض",
                                                                             amount = tx.amount,
                                                                             currentBalance = customer.balance
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("رسالة نصية بسند القبض SMS") },
+                                                            leadingIcon = { Icon(Icons.Default.Message, null, tint = Color(0xFF1E88E5)) },
+                                                            onClick = {
+                                                                expanded = false
+                                                                coroutineScope.launch {
+                                                                    val customer = viewModel.customers.value.find { it.id == tx.referenceId }
+                                                                    if (customer != null) {
+                                                                        ReceiptShareHelper.shareTransactionViaSMS(
+                                                                            context = context,
+                                                                            customerName = customer.name,
+                                                                            customerPhone = customer.phone,
+                                                                            amount = tx.amount,
+                                                                            currentBalance = customer.balance,
+                                                                            isReceipt = true
                                                                         )
                                                                     }
                                                                 }

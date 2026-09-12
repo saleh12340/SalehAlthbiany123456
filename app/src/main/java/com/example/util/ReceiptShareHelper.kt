@@ -217,13 +217,60 @@ object ReceiptShareHelper {
             layout.draw(canvas)
             canvas.restore()
 
-            val dir = File(context.cacheDir, "shared_receipts").apply { mkdirs() }
+            val appFolder = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "بقالة_العزي")
+            val dir = File(appFolder, "الصور_المؤقتة").apply { mkdirs() }
             val file = File(dir, "$name.png")
             FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
             file
         } catch (_: Exception) {
             null
+        }
+    }
+
+    fun shareInvoiceViaSMS(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>, customerBalance: Double? = null) {
+        val text = buildString {
+            appendLine("بقالة العزي")
+            appendLine("عليكم: ${Formatters.formatMoney(invoice.grandTotal)}")
+            if (items.isNotEmpty()) {
+                appendLine("تفاصيل العملية:")
+                items.forEach { item ->
+                    appendLine("- ${item.productName}: ${Formatters.formatMoney(item.subtotal)}")
+                }
+            }
+            if (customerBalance != null) {
+                appendLine("الإجمالي عليكم: ${Formatters.formatMoney(customerBalance)}")
+            } else {
+                appendLine("الإجمالي عليكم: ${Formatters.formatMoney(invoice.remainingAmount)}")
+            }
+        }
+        sendSMS(context, invoice.customerPhone, text)
+    }
+
+    fun shareTransactionViaSMS(context: Context, customerName: String, customerPhone: String, amount: Double, currentBalance: Double, isReceipt: Boolean) {
+        val text = buildString {
+            appendLine("بقالة العزي")
+            if (isReceipt) {
+                appendLine("لكم: ${Formatters.formatMoney(amount)}") // customer paid us, so it's "لكم" for this transaction
+                appendLine("تفاصيل العملية: سند قبض")
+            } else {
+                appendLine("عليكم: ${Formatters.formatMoney(amount)}") 
+                appendLine("تفاصيل العملية: سند صرف")
+            }
+            appendLine("رصيدكم لكم/عليكم: ${Formatters.formatMoney(currentBalance)}")
+        }
+        sendSMS(context, customerPhone, text)
+    }
+    
+    private fun sendSMS(context: Context, phone: String, text: String) {
+        try {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("smsto:${normalizePhoneNumber(phone)}")
+                putExtra("sms_body", text)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "لا يوجد تطبيق رسائل", Toast.LENGTH_SHORT).show()
         }
     }
 

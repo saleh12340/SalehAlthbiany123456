@@ -62,17 +62,25 @@ fun UnifiedOutlinedTextField(
 ) {
     val normalizedValue = remember(value) { Formatters.englishDigits(value) }
     var fieldValue by remember { mutableStateOf(TextFieldValue(normalizedValue)) }
-    var wasFocused by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
 
     // Synchronize only when the parent really changes the text externally.
-    // Do not recreate TextFieldValue on every keystroke: that destroys the
-    // IME-provided cursor position and is the source of the previous bug.
     LaunchedEffect(normalizedValue) {
         if (fieldValue.text != normalizedValue) {
             val safeSelection = fieldValue.selection.end.coerceIn(0, normalizedValue.length)
             fieldValue = TextFieldValue(
                 text = normalizedValue,
                 selection = TextRange(safeSelection)
+            )
+        }
+    }
+
+    // Select all text when the text field receives focus
+    LaunchedEffect(isFocused) {
+        if (isFocused && fieldValue.text.isNotEmpty()) {
+            kotlinx.coroutines.delay(100) // allow tap gesture to finish cursor placement
+            fieldValue = fieldValue.copy(
+                selection = TextRange(0, fieldValue.text.length)
             )
         }
     }
@@ -94,16 +102,7 @@ fun UnifiedOutlinedTextField(
                 onValueChange(normalizedText)
             },
             modifier = modifier.onFocusChanged { state ->
-                if (state.isFocused && !wasFocused) {
-                    wasFocused = true
-                    if (fieldValue.text.isNotEmpty()) {
-                        fieldValue = fieldValue.copy(
-                            selection = TextRange(0, fieldValue.text.length)
-                        )
-                    }
-                } else if (!state.isFocused) {
-                    wasFocused = false
-                }
+                isFocused = state.isFocused
             },
             enabled = enabled,
             readOnly = readOnly,
