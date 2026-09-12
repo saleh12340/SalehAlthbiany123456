@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun RequestBluetoothPermissions() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     LaunchedEffect(Unit) {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -158,7 +159,7 @@ private fun RequestBluetoothPermissions() {
             listOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         val missing = permissions.filter {
-            androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) launcher.launch(missing.toTypedArray())
     }
