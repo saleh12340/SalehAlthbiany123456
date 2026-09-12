@@ -11,7 +11,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,171 +28,112 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.GroceryViewModel
 
 class MainActivity : ComponentActivity() {
-
     private val viewModel: GroceryViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         setContent {
             MyApplicationTheme {
-                // Request Bluetooth runtime permissions if needed
                 RequestBluetoothPermissions()
-
-                // Enforce RTL across all UI
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         val navController = rememberNavController()
                         val postSaveBannerData by viewModel.postSaveShareBanner.collectAsState()
-
-                        NavHost(
-                            navController = navController,
-                            startDestination = "splash"
-                        ) {
+                        NavHost(navController = navController, startDestination = "splash") {
                             composable("splash") {
-                                SplashScreen(
-                                    onSplashFinished = {
-                                        navController.navigate("home") {
-                                            popUpTo("splash") { inclusive = true }
-                                        }
-                                    }
-                                )
+                                SplashScreen {
+                                    navController.navigate("home") { popUpTo("splash") { inclusive = true } }
+                                }
                             }
-
                             composable("home") {
-                                HomeScreen(
-                                    viewModel = viewModel,
-                                    onNavigate = { route -> navController.navigate(route) }
-                                )
+                                HomeScreen(viewModel = viewModel, onNavigate = { route -> navController.navigate(route) })
                             }
-
                             composable("sales") {
                                 SalesInvoicesScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
                                     onNavigateToCreate = { editId ->
-                                        if (editId != null && editId > 0) {
-                                            navController.navigate("create_sale?editId=$editId")
-                                        } else {
-                                            navController.navigate("create_sale")
-                                        }
+                                        navController.navigate(if (editId != null && editId > 0) "create_sale?editId=$editId" else "create_sale")
                                     }
                                 )
                             }
-
                             composable(
                                 route = "create_sale?editId={editId}",
-                                arguments = listOf(
-                                    navArgument("editId") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    }
-                                )
-                            ) { backStackEntry ->
-                                val editId = backStackEntry.arguments?.getString("editId")?.toLongOrNull()
+                                arguments = listOf(navArgument("editId") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                })
+                            ) { entry ->
                                 CreateInvoiceScreen(
                                     viewModel = viewModel,
-                                    editingInvoiceId = editId,
+                                    editingInvoiceId = entry.arguments?.getString("editId")?.toLongOrNull(),
                                     onNavigateBack = { navController.popBackStack() },
-                                    onInvoiceCreated = {
-                                        navController.popBackStack()
-                                    }
+                                    onInvoiceCreated = { navController.popBackStack() }
                                 )
                             }
-
                             composable("create_sale") {
                                 CreateInvoiceScreen(
                                     viewModel = viewModel,
                                     editingInvoiceId = null,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onInvoiceCreated = {
-                                        navController.popBackStack()
-                                    }
+                                    onInvoiceCreated = { navController.popBackStack() }
                                 )
                             }
-
                             composable("products") {
                                 ProductsScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToEditSaleInvoice = { editId ->
-                                        navController.navigate("create_sale?editId=$editId")
-                                    },
-                                    onNavigateToEditPurchaseInvoice = { editId ->
-                                        navController.navigate("purchases?editId=$editId")
-                                    }
+                                    onNavigateToEditSaleInvoice = { id -> navController.navigate("create_sale?editId=$id") },
+                                    onNavigateToEditPurchaseInvoice = { id -> navController.navigate("purchases?editId=$id") }
                                 )
                             }
-
                             composable("customers") {
                                 CustomersScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToEditInvoice = { editId ->
-                                        navController.navigate("create_sale?editId=$editId")
-                                    }
+                                    onNavigateToEditInvoice = { id -> navController.navigate("create_sale?editId=$id") }
                                 )
                             }
-
                             composable(
                                 route = "purchases?editId={editId}",
-                                arguments = listOf(
-                                    navArgument("editId") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    }
-                                )
-                            ) { backStackEntry ->
-                                val editId = backStackEntry.arguments?.getString("editId")?.toLongOrNull()
+                                arguments = listOf(navArgument("editId") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                })
+                            ) { entry ->
                                 PurchasesScreen(
                                     viewModel = viewModel,
-                                    editingInvoiceId = editId,
+                                    editingInvoiceId = entry.arguments?.getString("editId")?.toLongOrNull(),
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }
-
                             composable("suppliers") {
                                 SuppliersScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToEditPurchaseInvoice = { editId ->
-                                        navController.navigate("purchases?editId=$editId")
-                                    }
+                                    onNavigateToEditPurchaseInvoice = { id -> navController.navigate("purchases?editId=$id") }
                                 )
                             }
-
                             composable("expenses") {
-                                ExpensesScreen(
-                                    viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
-                                )
+                                ExpensesScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                             }
-
                             composable("reports") {
                                 ReportsScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToEditSaleInvoice = { id -> navController.navigate("create_invoice?invoiceId=$id") },
+                                    onNavigateToEditSaleInvoice = { id -> navController.navigate("create_sale?editId=$id") },
                                     onNavigateToEditPurchaseInvoice = { id -> navController.navigate("purchases?editId=$id") }
                                 )
                             }
-
                             composable("settings") {
-                                SettingsScreen(
-                                    viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
-                                )
+                                SettingsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                             }
                         }
-
-                        // Floating Post-Save Share Overlay (centered in the screen as requested)
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(bottom = 90.dp),
+                            modifier = Modifier.fillMaxSize().padding(bottom = 90.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             PostSaveShareBanner(
@@ -210,20 +150,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun RequestBluetoothPermissions() {
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        // Permissions handled
-    }
-
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     LaunchedEffect(Unit) {
-        val permissionsToRequest = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
-            permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
         } else {
-            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            listOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        launcher.launch(permissionsToRequest.toTypedArray())
+        val missing = permissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) launcher.launch(missing.toTypedArray())
     }
 }
