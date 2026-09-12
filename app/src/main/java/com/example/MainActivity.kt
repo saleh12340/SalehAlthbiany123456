@@ -10,18 +10,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.example.ui.components.PostSaveShareBanner
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.GroceryViewModel
@@ -39,11 +41,11 @@ class MainActivity : ComponentActivity() {
                 // Request Bluetooth runtime permissions if needed
                 RequestBluetoothPermissions()
 
-                // The application is Arabic/RTL: enforce RTL at the root so
-                // every screen, dialog, form and input inherits the same direction.
+                // Enforce RTL across all UI
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         val navController = rememberNavController()
+                        val postSaveBannerData by viewModel.postSaveShareBanner.collectAsState()
 
                         NavHost(
                             navController = navController,
@@ -70,13 +72,41 @@ class MainActivity : ComponentActivity() {
                                 SalesInvoicesScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToCreate = { navController.navigate("create_sale") }
+                                    onNavigateToCreate = { editId ->
+                                        if (editId != null && editId > 0) {
+                                            navController.navigate("create_sale?editId=$editId")
+                                        } else {
+                                            navController.navigate("create_sale")
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable(
+                                route = "create_sale?editId={editId}",
+                                arguments = listOf(
+                                    navArgument("editId") {
+                                        type = NavType.StringType
+                                        nullable = true
+                                        defaultValue = null
+                                    }
+                                )
+                            ) { backStackEntry ->
+                                val editId = backStackEntry.arguments?.getString("editId")?.toLongOrNull()
+                                CreateInvoiceScreen(
+                                    viewModel = viewModel,
+                                    editingInvoiceId = editId,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onInvoiceCreated = {
+                                        navController.popBackStack()
+                                    }
                                 )
                             }
 
                             composable("create_sale") {
                                 CreateInvoiceScreen(
                                     viewModel = viewModel,
+                                    editingInvoiceId = null,
                                     onNavigateBack = { navController.popBackStack() },
                                     onInvoiceCreated = {
                                         navController.popBackStack()
@@ -132,6 +162,19 @@ class MainActivity : ComponentActivity() {
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }
+                        }
+
+                        // Floating Post-Save Share Overlay (centered in the screen as requested)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(bottom = 90.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PostSaveShareBanner(
+                                data = postSaveBannerData,
+                                onDismiss = { viewModel.clearPostSaveShare() }
+                            )
                         }
                     }
                 }

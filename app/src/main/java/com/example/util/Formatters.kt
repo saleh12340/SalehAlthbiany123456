@@ -7,16 +7,17 @@ import java.util.*
 
 /**
  * Central formatting rules for the entire application.
- * Arabic UI remains RTL, while every numeric character is always 0-9.
+ * Arabic UI remains RTL, while every numeric character is strictly Western 0-9.
  */
 object Formatters {
-    private val englishSymbols = DecimalFormatSymbols(Locale.US)
-    private val decimalFormat = DecimalFormat("#,##0.##", englishSymbols)
-    private val currencyFormat = DecimalFormat("#,##0.00", englishSymbols)
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
+    val englishSymbols = DecimalFormatSymbols(Locale.US)
+    val decimalFormat = DecimalFormat("#,##0.##", englishSymbols)
+    val currencyFormat = DecimalFormat("#,##0.00", englishSymbols)
+    val integerFormat = DecimalFormat("#,##0", englishSymbols)
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
 
-    /** Converts Arabic-Indic and Extended Arabic-Indic digits to English digits. */
+    /** Converts Arabic-Indic (٠-٩) and Extended Arabic-Indic digits to English digits (0-9). */
     fun englishDigits(value: String): String = value.map { char ->
         when (char) {
             '\u0660' -> '0'
@@ -49,6 +50,10 @@ object Formatters {
 
     fun formatNumber(number: Double): String {
         return decimalFormat.format(number)
+    }
+
+    fun formatInt(number: Int): String {
+        return integerFormat.format(number)
     }
 
     fun getTodayDate(): String {

@@ -14,11 +14,14 @@ import com.example.data.local.entities.SaleInvoiceItem
 import java.io.File
 import java.io.FileOutputStream
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 object PdfReceiptGenerator {
 
-    private val moneyFormat = DecimalFormat("#,##0.00")
-    private val qtyFormat = DecimalFormat("#,##0.##")
+    private val englishSymbols = DecimalFormatSymbols(Locale.US)
+    private val moneyFormat = DecimalFormat("#,##0.00", englishSymbols)
+    private val qtyFormat = DecimalFormat("#,##0.##", englishSymbols)
 
     /**
      * Generates a PDF invoice file and returns its File object.

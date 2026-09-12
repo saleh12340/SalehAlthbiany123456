@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.entities.*
 import com.example.data.local.repository.GroceryRepository
+import com.example.ui.components.PostSaveShareData
 import com.example.util.BluetoothPrinterDevice
 import com.example.util.BluetoothPrinterManager
 import com.example.util.CustomerStatementPrinter
@@ -95,6 +96,19 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     fun setPaperSize(size: String) = printerManager.setPaperSize(size)
     fun printTestReceipt(onResult: (Boolean) -> Unit) { viewModelScope.launch { onResult(printerManager.printTestReceipt()) } }
 
+    // ==========================================
+    // POST-SAVE FLOATING SHARE BANNER STATE
+    // ==========================================
+    val postSaveShareBanner = MutableStateFlow<PostSaveShareData?>(null)
+
+    fun triggerPostSaveShare(message: String, onShare: () -> Unit) {
+        postSaveShareBanner.value = PostSaveShareData(message, onShare)
+    }
+
+    fun clearPostSaveShare() {
+        postSaveShareBanner.value = null
+    }
+
     fun saveProduct(product: Product, onComplete: () -> Unit = {}) { viewModelScope.launch { if (product.id == 0L) repository.insertProduct(product) else repository.updateProduct(product); onComplete() } }
     fun updateStock(productId: Long, delta: Double) { viewModelScope.launch { repository.updateProductStock(productId, delta) } }
     fun deleteProduct(product: Product) { viewModelScope.launch { repository.deleteProduct(product) } }
@@ -123,9 +137,11 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>> = repository.getPurchaseInvoicesForSupplier(supplierId)
 
     fun createSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createSaleInvoice(invoice, items)) } }
+    fun updateSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.updateSaleInvoice(invoice, items); onComplete() } }
     fun deleteSaleInvoice(invoice: SaleInvoice, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.deleteSaleInvoice(invoice); onComplete() } }
     fun getInvoiceItems(invoiceId: Long): Flow<List<SaleInvoiceItem>> = repository.getItemsForSaleInvoice(invoiceId)
     suspend fun getInvoiceItemsList(invoiceId: Long): List<SaleInvoiceItem> = repository.getItemsForSaleInvoiceList(invoiceId)
+    suspend fun getSaleInvoiceById(id: Long): SaleInvoice? = repository.getSaleInvoiceById(id)
     suspend fun getNextSaleInvoiceNumber(): String = Formatters.generateInvoiceNumber("INV", repository.getSaleInvoiceCount())
 
     fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createPurchaseInvoice(invoice, items)) } }

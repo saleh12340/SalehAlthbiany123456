@@ -8,10 +8,13 @@ import android.graphics.Typeface
 import com.example.data.local.entities.Customer
 import com.example.data.local.entities.CustomerTransaction
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 object CustomerStatementPrinter {
-    private val money = DecimalFormat("#,##0.00")
-    private val qty = DecimalFormat("#,##0.##")
+    private val englishSymbols = DecimalFormatSymbols(Locale.US)
+    private val money = DecimalFormat("#,##0.00", englishSymbols)
+    private val qty = DecimalFormat("#,##0.##", englishSymbols)
 
     fun generate(customer: Customer, transactions: List<CustomerTransaction>, paperWidth: Int): Bitmap {
         val scale = if (paperWidth >= 500) 1.35f else 1f
@@ -58,31 +61,27 @@ object CustomerStatementPrinter {
             y += 24f * scale
         }
         canvas.drawText("الرصيد الحالي: ${money.format(customer.balance)} ر.ي", rightX, y, bold)
-        y += 30f * scale
-        canvas.drawLine(margin, y, rightX, y, line)
-        y += 24f * scale
-
-        canvas.drawText("التاريخ", rightX, y, bold)
-        canvas.drawText("البيان", paperWidth * 0.58f, y, bold)
-        canvas.drawText("المبلغ", paperWidth * 0.32f, y, bold)
-        canvas.drawText("الدفعة", margin + 70f * scale, y, bold)
-        y += 24f * scale
+        y += 26f * scale
         canvas.drawLine(margin, y, rightX, y, line)
         y += 22f * scale
 
-        transactions.forEach { tx ->
-            canvas.drawText("${tx.date} ${tx.time}", rightX, y, right)
-            val description = if (tx.description.length > 18) tx.description.take(16) + ".." else tx.description
-            canvas.drawText(description, paperWidth * 0.58f, y, right)
-            canvas.drawText(if (tx.amount > 0) money.format(tx.amount) else "-", paperWidth * 0.32f, y, right)
-            canvas.drawText(if (tx.paid > 0) money.format(tx.paid) else "-", margin + 70f * scale, y, left)
-            y += lineHeight
+        canvas.drawText("البيان / التاريخ", rightX, y, bold)
+        canvas.drawText("المبلغ", margin, y, Paint(left).apply { typeface = Typeface.DEFAULT_BOLD })
+        y += 24f * scale
+
+        for (tx in transactions) {
+            val label = "${tx.date} - ${tx.type}"
+            canvas.drawText(label, rightX, y, right)
+            val amt = if (tx.paid > 0) "- ${money.format(tx.paid)}" else "+ ${money.format(tx.amount)}"
+            canvas.drawText("$amt ر.ي", margin, y, left)
+            y += 22f * scale
         }
 
+        y += 10f * scale
         canvas.drawLine(margin, y, rightX, y, line)
         y += 26f * scale
-        center.textSize = 16f * scale
-        canvas.drawText("شكراً لتعاملكم معنا", paperWidth / 2f, y, center)
+        canvas.drawText("بقالة العزي - هاتف: 776425052", paperWidth / 2f, y, center)
+
         return bitmap
     }
 }

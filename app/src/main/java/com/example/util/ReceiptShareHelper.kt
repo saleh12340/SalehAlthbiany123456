@@ -28,6 +28,20 @@ object ReceiptShareHelper {
     private const val STORE = "بقالة العزي للمواد الغذائية"
     private const val PHONE = "776425052"
 
+    fun normalizePhoneNumber(raw: String): String {
+        val digits = raw.filter { it.isDigit() }
+        if (digits.isBlank()) return ""
+        return when {
+            digits.startsWith("00967") -> digits.removePrefix("00")
+            digits.startsWith("967") -> digits
+            digits.startsWith("0") && digits.length == 10 -> "967" + digits.substring(1)
+            digits.length == 9 && (digits.startsWith("7") || digits.startsWith("1") || digits.startsWith("2")) -> "967$digits"
+            digits.startsWith("05") && digits.length == 10 -> "966" + digits.substring(1) // Saudi format
+            digits.startsWith("966") -> digits
+            else -> digits
+        }
+    }
+
     fun shareInvoiceToWhatsApp(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>) {
         val text = invoiceText(invoice, items)
         shareToWhatsApp(context, createArabicImage(context, text, "invoice_${invoice.invoiceNumber}"), text, invoice.customerPhone)
@@ -61,9 +75,26 @@ object ReceiptShareHelper {
                 if (tx.paid > 0) appendLine("دفعة: ${Formatters.formatMoney(tx.paid)}")
             }
             appendLine("------------------------")
-            appendLine("الرصيد الحالي: ${Formatters.formatMoney(customer.balance)} ر.ي")
+            appendLine("الرصيد الحالي: ${Formatters.formatMoney(customer.balance)}")
         }
         shareToWhatsApp(context, createArabicImage(context, text, "statement_${customer.id}"), text, customer.phone)
+    }
+
+    fun shareTransactionReceiptToWhatsApp(context: Context, customerName: String, customerPhone: String, title: String, amount: Double, currentBalance: Double) {
+        val text = buildString {
+            appendLine(STORE)
+            appendLine("هاتف: $PHONE")
+            appendLine("إشعار سند قبض / سداد")
+            appendLine("العميل: $customerName")
+            if (customerPhone.isNotBlank()) appendLine("الهاتف: $customerPhone")
+            appendLine("------------------------")
+            appendLine("المبلغ المقبوض: ${Formatters.formatMoney(amount)}")
+            appendLine("الرصيد المتبقي (الدين): ${Formatters.formatMoney(currentBalance)}")
+            appendLine("التاريخ: ${Formatters.getTodayDate()} ${Formatters.getCurrentTime()}")
+            appendLine("------------------------")
+            appendLine("شكراً لتعاملكم معنا")
+        }
+        shareToWhatsApp(context, createArabicImage(context, text, "receipt_${System.currentTimeMillis()}"), text, customerPhone)
     }
 
     private fun invoiceText(invoice: SaleInvoice, items: List<SaleInvoiceItem>): String = buildString {
@@ -79,8 +110,15 @@ object ReceiptShareHelper {
         }
         appendLine("------------------------")
         appendLine("الإجمالي: ${Formatters.formatMoney(invoice.grandTotal)}")
+        if (invoice.discount > 0) {
+            appendLine("الخصم: ${Formatters.formatMoney(invoice.discount)}")
+        }
         appendLine("المدفوع: ${Formatters.formatMoney(invoice.paidAmount)}")
-        appendLine("المتبقي: ${Formatters.formatMoney(invoice.remainingAmount)}")
+        if (invoice.remainingAmount > 0) {
+            appendLine("المتبقي (دين): ${Formatters.formatMoney(invoice.remainingAmount)}")
+        } else {
+            appendLine("الحالة: مسدد بالكامل (خالص)")
+        }
     }
 
     private fun purchaseText(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>): String = buildString {
@@ -163,17 +201,52 @@ object ReceiptShareHelper {
         }
     }
 
-    private fun shareToWhatsApp(context: Context, image: File?, text: String, phone: String) {
+    fun shareToWhatsApp(context: Context, image: File?, text: String, phone: String) {
+        val normalized = normalizePhoneNumber(phone)
+
+        if (normalized.isNotBlank()) {
+            // Direct chat to WhatsApp customer page
+            try {
+                val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                return
+            } catch (_: Exception) {
+                // Try WhatsApp Business or browser if regular WhatsApp package isn't directly bound
+                try {
+                    val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        setPackage("com.whatsapp.w4b")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    return
+                } catch (_: Exception) {
+                    try {
+                        val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        return
+                    } catch (_: Exception) {
+                        // Fallback below
+                    }
+                }
+            }
+        }
+
+        // Generic share chooser fallback if no customer phone
         try {
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
+                type = if (image != null) "image/png" else "text/plain"
                 putExtra(Intent.EXTRA_TEXT, text)
                 if (image != null) {
                     putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", image))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                if (phone.isNotBlank()) {
-                    putExtra("jid", phone.filter(Char::isDigit) + "@s.whatsapp.net")
                 }
                 setPackage("com.whatsapp")
             }

@@ -36,6 +36,7 @@ fun InvoiceDetailDialog(
     invoice: SaleInvoice,
     viewModel: GroceryViewModel,
     onDismiss: () -> Unit,
+    onEditInvoice: ((Long) -> Unit)? = null,
     onInvoiceDeleted: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -87,7 +88,7 @@ fun InvoiceDetailDialog(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Header with badge, title and delete button
+                // Header with badge, title, edit and delete buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -99,35 +100,46 @@ fun InvoiceDetailDialog(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        Text(
+                            text = "تفاصيل الفاتورة",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = InvoiceGreen
+                        )
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(6.dp),
                             color = InvoiceGreen.copy(alpha = 0.12f)
                         ) {
                             Text(
                                 text = "#${invoice.invoiceNumber}",
                                 color = InvoiceGreen,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
-                        Text(
-                            text = "تفاصيل فاتورة المبيعات",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleLarge
-                        )
                     }
 
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, "حذف الفاتورة", tint = MaterialTheme.colorScheme.error)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (onEditInvoice != null) {
+                            IconButton(onClick = {
+                                onDismiss()
+                                onEditInvoice(invoice.id)
+                            }) {
+                                Icon(Icons.Default.Edit, "تعديل الفاتورة", tint = InvoiceGreen)
+                            }
+                        }
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
 
-                // Customer Info Banner Card
+                // Customer & Date Info Card
                 Card(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
                     border = BorderStroke(1.dp, Color(0xFFD5E6DA)),
                     modifier = Modifier.fillMaxWidth()
@@ -142,54 +154,50 @@ fun InvoiceDetailDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("العميل:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("العميل:", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(invoice.customerName, fontWeight = FontWeight.Bold)
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("التاريخ والوقت:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${invoice.date} • ${invoice.time}", style = MaterialTheme.typography.bodySmall)
+                        if (invoice.customerPhone.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("الهاتف:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(invoice.customerPhone, fontWeight = FontWeight.Bold)
+                            }
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("طريقة الدفع:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (invoice.paymentMethod == "نقدي") Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
-                            ) {
-                                Text(
-                                    text = invoice.paymentMethod,
-                                    color = if (invoice.paymentMethod == "نقدي") Color(0xFF2E7D32) else Color(0xFFC62828),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
+                            Text("التاريخ والوقت:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${invoice.date}  ${invoice.time}")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("طريقة الدفع:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                if (invoice.remainingAmount > 0) "آجل (دين)" else "نقدي",
+                                color = if (invoice.remainingAmount > 0) MaterialTheme.colorScheme.error else InvoiceGreen,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
 
-                // Table Header
-                Surface(
-                    color = Color(0xFFEAEFEA),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                // Items list header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("الإجمالي", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                        Text("الكمية", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(0.7f))
-                        Text("الصنف", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1.3f))
-                        Text("سعر الوحدة", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(0.9f))
-                    }
+                    Text(
+                        text = "الأصناف المباعة (${items.size})",
+                        fontWeight = FontWeight.Bold,
+                        color = InvoiceGreen
+                    )
                 }
 
                 // Items List
@@ -200,37 +208,54 @@ fun InvoiceDetailDialog(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(items) { item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(Formatters.formatMoney(item.subtotal), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                            Text("${Formatters.formatNumber(item.quantity)} ${item.unit}", modifier = Modifier.weight(0.7f), style = MaterialTheme.typography.bodySmall)
-                            Text(item.productName, modifier = Modifier.weight(1.3f), maxLines = 2, style = MaterialTheme.typography.bodySmall)
-                            Text(Formatters.formatMoney(item.unitPrice), modifier = Modifier.weight(0.9f), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.productName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(
+                                        "${Formatters.formatNumber(item.quantity)} ${item.unit} × ${Formatters.formatMoney(item.unitPrice)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    Formatters.formatMoney(item.subtotal),
+                                    fontWeight = FontWeight.Bold,
+                                    color = InvoiceGreen
+                                )
+                            }
                         }
-                        HorizontalDivider(color = Color(0xFFF0F4F1))
                     }
                 }
 
-                // Totals Summary Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                // Financial Summary
+                Card(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFF4F8F5),
-                    border = BorderStroke(1.dp, Color(0xFFD4E3D8))
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                    border = BorderStroke(1.dp, Color(0xFFD5E6DA)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("إجمالي الفاتورة:")
+                            Text("الإجمالي الكلي:", fontWeight = FontWeight.Bold)
                             Text(Formatters.formatMoney(invoice.grandTotal), fontWeight = FontWeight.Bold, color = InvoiceGreen)
                         }
                         if (invoice.discount > 0) {

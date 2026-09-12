@@ -46,7 +46,7 @@ private val SaleGreen = Color(0xFF0E6B38)
 fun SalesInvoicesScreen(
     viewModel: GroceryViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToCreate: () -> Unit
+    onNavigateToCreate: (Long?) -> Unit
 ) {
     val context = LocalContext.current
     val invoices by viewModel.saleInvoices.collectAsState()
@@ -575,7 +575,12 @@ fun SalesInvoicesScreen(
                                     paymentMethod = if (remainingAmount > 0 && paidAmount == 0.0) "آجل" else "نقدي",
                                     notes = ""
                                 )
-                                viewModel.createSaleInvoice(newInvoice, invoiceItems) { _ ->
+                                viewModel.createSaleInvoice(newInvoice, invoiceItems) { createdId ->
+                                    val savedInv = newInvoice.copy(id = createdId)
+                                    val shareMsg = if (remainingAmount > 0) "عليه ${Formatters.formatMoney(remainingAmount)}" else "تم حفظ الفاتورة (خالصة)"
+                                    viewModel.triggerPostSaveShare(shareMsg) {
+                                        ReceiptShareHelper.shareInvoiceToWhatsApp(context, savedInv, invoiceItems)
+                                    }
                                     showQuickCreateInvoice = false
                                     Toast.makeText(context, "تم حفظ الفاتورة وتحديث المخزون بنجاح", Toast.LENGTH_SHORT).show()
                                 }
@@ -628,6 +633,10 @@ fun SalesInvoicesScreen(
             invoice = invoice,
             viewModel = viewModel,
             onDismiss = { selectedInvoiceForDetail = null },
+            onEditInvoice = { invId ->
+                selectedInvoiceForDetail = null
+                onNavigateToCreate(invId)
+            },
             onInvoiceDeleted = { selectedInvoiceForDetail = null }
         )
     }
@@ -867,6 +876,13 @@ fun SalesInvoicesScreen(
                                     )
 
                                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        IconButton(
+                                            onClick = { onNavigateToCreate(invoice.id) },
+                                            modifier = Modifier.size(34.dp)
+                                        ) {
+                                            Icon(Icons.Default.Edit, "تعديل الفاتورة", tint = SaleGreen, modifier = Modifier.size(18.dp))
+                                        }
+
                                         IconButton(
                                             onClick = {
                                                 coroutineScope.launch {

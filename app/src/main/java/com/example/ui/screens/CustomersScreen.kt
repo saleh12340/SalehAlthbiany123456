@@ -283,7 +283,7 @@ fun CustomersScreen(
 
                     UnifiedOutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { amountText = Formatters.englishDigits(it) },
                         label = { Text("المبلغ المقبوض *") },
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -304,7 +304,7 @@ fun CustomersScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val amount = amountText.toDoubleOrNull()
+                        val amount = Formatters.englishDigits(amountText).toDoubleOrNull()
                         if (amount == null || amount <= 0) {
                             Toast.makeText(context, "أدخل مبلغاً صحيحاً", Toast.LENGTH_SHORT).show()
                             return@Button
@@ -314,6 +314,18 @@ fun CustomersScreen(
                             amount = amount,
                             note = notesText.ifBlank { "سداد دين" }
                         ) {
+                            val newBalance = (customer.balance - amount).coerceAtLeast(0.0)
+                            val shareMsg = if (newBalance > 0) "عليه ${Formatters.formatMoney(newBalance)}" else "تم سداد كامل الحساب (خالص)"
+                            viewModel.triggerPostSaveShare(shareMsg) {
+                                ReceiptShareHelper.shareTransactionReceiptToWhatsApp(
+                                    context = context,
+                                    customerName = customer.name,
+                                    customerPhone = customer.phone,
+                                    title = "سند قبض",
+                                    amount = amount,
+                                    currentBalance = newBalance
+                                )
+                            }
                             paymentCustomer = null
                             Toast.makeText(context, "تم تسجيل سند القبض بنجاح وتحديث الرصيد", Toast.LENGTH_SHORT).show()
                         }

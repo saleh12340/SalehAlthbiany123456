@@ -1,26 +1,229 @@
 package com.example.data.local.repository
 
-import com.example.data.local.AppDatabase
 import com.example.data.local.dao.GroceryDao
 import com.example.data.local.entities.*
 import kotlinx.coroutines.flow.Flow
 
 class GroceryRepository(private val dao: GroceryDao) {
-    val allProducts: Flow<List<Product>> = dao.getAllProducts(); val lowStockProducts: Flow<List<Product>> = dao.getLowStockProducts(); fun searchProducts(query: String): Flow<List<Product>> = dao.searchProducts(query); suspend fun getProductById(id: Long): Product? = dao.getProductById(id); suspend fun getProductByBarcode(barcode: String): Product? = dao.getProductByBarcode(barcode); suspend fun insertProduct(product: Product): Long = dao.insertProduct(product); suspend fun updateProduct(product: Product) = dao.updateProduct(product); suspend fun updateProductStock(id: Long, delta: Double) = dao.updateProductStock(id, delta); suspend fun deleteProduct(product: Product) = dao.deleteProduct(product)
-    val allCustomers: Flow<List<Customer>> = dao.getAllCustomers(); val totalCustomerDebts: Flow<Double> = dao.getTotalCustomerDebts(); fun searchCustomers(query: String): Flow<List<Customer>> = dao.searchCustomers(query); suspend fun getCustomerById(id: Long): Customer? = dao.getCustomerById(id); suspend fun insertCustomer(customer: Customer): Long = dao.insertCustomer(customer); suspend fun updateCustomer(customer: Customer) = dao.updateCustomer(customer)
-    suspend fun deleteCustomer(customer: Customer) { dao.detachCustomerFromInvoices(customer.id); dao.deleteCustomerTransactions(customer.id); dao.deleteCustomer(customer) }
-    suspend fun deleteCustomerTransaction(transaction: CustomerTransaction) { if (transaction.invoiceId != null) dao.updateCustomerFinancials(transaction.customerId, -transaction.remaining, -transaction.amount, -transaction.paid) else dao.updateCustomerFinancials(transaction.customerId, transaction.paid, 0.0, -transaction.paid); dao.deleteCustomerTransaction(transaction) }
-    val allSuppliers: Flow<List<Supplier>> = dao.getAllSuppliers(); val totalSupplierDebts: Flow<Double> = dao.getTotalSupplierDebts(); fun searchSuppliers(query: String): Flow<List<Supplier>> = dao.searchSuppliers(query); suspend fun getSupplierById(id: Long): Supplier? = dao.getSupplierById(id); suspend fun insertSupplier(supplier: Supplier): Long = dao.insertSupplier(supplier); suspend fun updateSupplier(supplier: Supplier) = dao.updateSupplier(supplier); suspend fun deleteSupplier(supplier: Supplier) = dao.deleteSupplier(supplier)
-    val allSaleInvoices: Flow<List<SaleInvoice>> = dao.getAllSaleInvoices(); fun searchSaleInvoices(query: String): Flow<List<SaleInvoice>> = dao.searchSaleInvoices(query); fun getSaleInvoicesByDate(date: String): Flow<List<SaleInvoice>> = dao.getSaleInvoicesByDate(date); fun getSaleInvoicesBetweenDates(startDate: String, endDate: String): Flow<List<SaleInvoice>> = dao.getSaleInvoicesBetweenDates(startDate, endDate); suspend fun getSaleInvoiceById(id: Long): SaleInvoice? = dao.getSaleInvoiceById(id); suspend fun getSaleInvoiceCount(): Int = dao.getSaleInvoiceCount()
-    suspend fun createSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>): Long { val invoiceId = dao.insertSaleInvoice(invoice); dao.insertSaleInvoiceItems(items.map { it.copy(invoiceId = invoiceId) }); for (item in items) item.productId?.let { dao.updateProductStock(it, -item.quantity) }; invoice.customerId?.let { custId -> dao.updateCustomerFinancials(custId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount); dao.insertCustomerTransaction(CustomerTransaction(customerId = custId, date = invoice.date, time = invoice.time, type = "فاتورة مبيعات", description = "فاتورة مبيعات #${invoice.invoiceNumber}", amount = invoice.grandTotal, paid = invoice.paidAmount, remaining = invoice.remainingAmount, invoiceId = invoiceId)) }; return invoiceId }
-    suspend fun deleteSaleInvoice(invoice: SaleInvoice) { val items = dao.getItemsForSaleInvoiceList(invoice.id); for (item in items) item.productId?.let { dao.updateProductStock(it, item.quantity) }; invoice.customerId?.let { dao.updateCustomerFinancials(it, -invoice.remainingAmount, -invoice.grandTotal, -invoice.paidAmount) }; dao.deleteCustomerTransactionForInvoice(invoice.id); dao.deleteSaleInvoiceItems(invoice.id); dao.deleteSaleInvoice(invoice) }
-    fun getItemsForSaleInvoice(invoiceId: Long): Flow<List<SaleInvoiceItem>> = dao.getItemsForSaleInvoice(invoiceId); suspend fun getItemsForSaleInvoiceList(invoiceId: Long): List<SaleInvoiceItem> = dao.getItemsForSaleInvoiceList(invoiceId); fun getSaleInvoicesForCustomer(customerId: Long): Flow<List<SaleInvoice>> = dao.getSaleInvoicesForCustomer(customerId)
-    val allPurchaseInvoices: Flow<List<PurchaseInvoice>> = dao.getAllPurchaseInvoices(); fun searchPurchaseInvoices(query: String): Flow<List<PurchaseInvoice>> = dao.searchPurchaseInvoices(query); fun getPurchaseInvoicesByDate(date: String): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesByDate(date); fun getPurchaseInvoicesBetweenDates(startDate: String, endDate: String): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesBetweenDates(startDate, endDate); suspend fun getPurchaseInvoiceById(id: Long): PurchaseInvoice? = dao.getPurchaseInvoiceById(id); suspend fun getPurchaseInvoiceCount(): Int = dao.getPurchaseInvoiceCount(); fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesForSupplier(supplierId)
-    suspend fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>): Long { val invoiceId = dao.insertPurchaseInvoice(invoice); dao.insertPurchaseInvoiceItems(items.map { it.copy(invoiceId = invoiceId) }); for (item in items) item.productId?.let { dao.updateProductStock(it, item.quantity) }; invoice.supplierId?.let { suppId -> dao.updateSupplierFinancials(suppId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount); dao.insertSupplierTransaction(SupplierTransaction(supplierId = suppId, date = invoice.date, time = invoice.time, type = "فاتورة مشتريات", description = "فاتورة مشتريات #${invoice.invoiceNumber}", amount = invoice.grandTotal, paid = invoice.paidAmount, remaining = invoice.remainingAmount, invoiceId = invoiceId)) }; return invoiceId }
-    suspend fun deletePurchaseInvoice(invoice: PurchaseInvoice) { val items = dao.getItemsForPurchaseInvoiceList(invoice.id); for (item in items) item.productId?.let { dao.updateProductStock(it, -item.quantity) }; invoice.supplierId?.let { suppId -> dao.updateSupplierFinancials(suppId, -invoice.remainingAmount, -invoice.grandTotal, -invoice.paidAmount); dao.getTransactionsForSupplierList(suppId).filter { it.invoiceId == invoice.id }.forEach { dao.deleteSupplierTransaction(it) } }; dao.deletePurchaseInvoiceItems(invoice.id); dao.deletePurchaseInvoice(invoice) }
-    fun getItemsForPurchaseInvoice(invoiceId: Long): Flow<List<PurchaseInvoiceItem>> = dao.getItemsForPurchaseInvoice(invoiceId); suspend fun getItemsForPurchaseInvoiceList(invoiceId: Long): List<PurchaseInvoiceItem> = dao.getItemsForPurchaseInvoiceList(invoiceId)
-    fun getTransactionsForCustomer(customerId: Long): Flow<List<CustomerTransaction>> = dao.getTransactionsForCustomer(customerId); suspend fun addCustomerPayment(customerId: Long, amount: Double, date: String, time: String, note: String): Long { dao.updateCustomerFinancials(customerId, -amount, 0.0, amount); return dao.insertCustomerTransaction(CustomerTransaction(customerId = customerId, date = date, time = time, type = "سند قبض", description = if (note.isNotBlank()) "سند قبض: $note" else "سند قبض نقدي", amount = 0.0, paid = amount, remaining = 0.0)) }
-    fun getTransactionsForSupplier(supplierId: Long): Flow<List<SupplierTransaction>> = dao.getTransactionsForSupplier(supplierId); suspend fun addSupplierPayment(supplierId: Long, amount: Double, date: String, time: String, note: String): Long { dao.updateSupplierFinancials(supplierId, -amount, 0.0, amount); return dao.insertSupplierTransaction(SupplierTransaction(supplierId = supplierId, date = date, time = time, type = "سند صرف", description = if (note.isNotBlank()) "سند صرف للمورد: $note" else "دفعة نقدية للمورد", amount = 0.0, paid = amount, remaining = 0.0)) }
-    val allExpenses: Flow<List<Expense>> = dao.getAllExpenses(); fun getExpensesByDate(date: String): Flow<List<Expense>> = dao.getExpensesByDate(date); fun getExpensesBetweenDates(startDate: String, endDate: String): Flow<List<Expense>> = dao.getExpensesBetweenDates(startDate, endDate); fun getTodayExpensesSum(date: String): Flow<Double> = dao.getTodayExpensesSum(date); suspend fun insertExpense(expense: Expense): Long = dao.insertExpense(expense); suspend fun updateExpense(expense: Expense) = dao.updateExpense(expense); suspend fun deleteExpense(expense: Expense) = dao.deleteExpense(expense)
-    fun getTodaySalesTotal(date: String): Flow<Double> = dao.getTodaySalesTotal(date); fun getTodayPurchasesTotal(date: String): Flow<Double> = dao.getTodayPurchasesTotal(date)
+    val allProducts: Flow<List<Product>> = dao.getAllProducts()
+    val lowStockProducts: Flow<List<Product>> = dao.getLowStockProducts()
+    fun searchProducts(query: String): Flow<List<Product>> = dao.searchProducts(query)
+    suspend fun getProductById(id: Long): Product? = dao.getProductById(id)
+    suspend fun getProductByBarcode(barcode: String): Product? = dao.getProductByBarcode(barcode)
+    suspend fun insertProduct(product: Product): Long = dao.insertProduct(product)
+    suspend fun updateProduct(product: Product) = dao.updateProduct(product)
+    suspend fun updateProductStock(id: Long, delta: Double) = dao.updateProductStock(id, delta)
+    suspend fun deleteProduct(product: Product) = dao.deleteProduct(product)
+
+    val allCustomers: Flow<List<Customer>> = dao.getAllCustomers()
+    val totalCustomerDebts: Flow<Double> = dao.getTotalCustomerDebts()
+    fun searchCustomers(query: String): Flow<List<Customer>> = dao.searchCustomers(query)
+    suspend fun getCustomerById(id: Long): Customer? = dao.getCustomerById(id)
+    suspend fun insertCustomer(customer: Customer): Long = dao.insertCustomer(customer)
+    suspend fun updateCustomer(customer: Customer) = dao.updateCustomer(customer)
+    suspend fun deleteCustomer(customer: Customer) {
+        dao.detachCustomerFromInvoices(customer.id)
+        dao.deleteCustomerTransactions(customer.id)
+        dao.deleteCustomer(customer)
+    }
+    suspend fun deleteCustomerTransaction(transaction: CustomerTransaction) {
+        if (transaction.invoiceId != null) {
+            dao.updateCustomerFinancials(transaction.customerId, -transaction.remaining, -transaction.amount, -transaction.paid)
+        } else {
+            dao.updateCustomerFinancials(transaction.customerId, transaction.paid, 0.0, -transaction.paid)
+        }
+        dao.deleteCustomerTransaction(transaction)
+    }
+
+    val allSuppliers: Flow<List<Supplier>> = dao.getAllSuppliers()
+    val totalSupplierDebts: Flow<Double> = dao.getTotalSupplierDebts()
+    fun searchSuppliers(query: String): Flow<List<Supplier>> = dao.searchSuppliers(query)
+    suspend fun getSupplierById(id: Long): Supplier? = dao.getSupplierById(id)
+    suspend fun insertSupplier(supplier: Supplier): Long = dao.insertSupplier(supplier)
+    suspend fun updateSupplier(supplier: Supplier) = dao.updateSupplier(supplier)
+    suspend fun deleteSupplier(supplier: Supplier) = dao.deleteSupplier(supplier)
+
+    val allSaleInvoices: Flow<List<SaleInvoice>> = dao.getAllSaleInvoices()
+    fun searchSaleInvoices(query: String): Flow<List<SaleInvoice>> = dao.searchSaleInvoices(query)
+    fun getSaleInvoicesByDate(date: String): Flow<List<SaleInvoice>> = dao.getSaleInvoicesByDate(date)
+    fun getSaleInvoicesBetweenDates(startDate: String, endDate: String): Flow<List<SaleInvoice>> = dao.getSaleInvoicesBetweenDates(startDate, endDate)
+    suspend fun getSaleInvoiceById(id: Long): SaleInvoice? = dao.getSaleInvoiceById(id)
+    suspend fun getSaleInvoiceCount(): Int = dao.getSaleInvoiceCount()
+
+    suspend fun createSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>): Long {
+        val invoiceId = dao.insertSaleInvoice(invoice)
+        dao.insertSaleInvoiceItems(items.map { it.copy(invoiceId = invoiceId) })
+        for (item in items) {
+            item.productId?.let { dao.updateProductStock(it, -item.quantity) }
+        }
+        invoice.customerId?.let { custId ->
+            dao.updateCustomerFinancials(custId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)
+            dao.insertCustomerTransaction(
+                CustomerTransaction(
+                    customerId = custId,
+                    date = invoice.date,
+                    time = invoice.time,
+                    type = "فاتورة مبيعات",
+                    description = "فاتورة مبيعات #${invoice.invoiceNumber}",
+                    amount = invoice.grandTotal,
+                    paid = invoice.paidAmount,
+                    remaining = invoice.remainingAmount,
+                    invoiceId = invoiceId
+                )
+            )
+        }
+        return invoiceId
+    }
+
+    suspend fun updateSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>) {
+        // Revert old stock changes
+        val oldItems = dao.getItemsForSaleInvoiceList(invoice.id)
+        for (item in oldItems) {
+            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+        }
+        // Revert old customer financials
+        val oldInvoice = dao.getSaleInvoiceById(invoice.id)
+        oldInvoice?.customerId?.let { oldCustId ->
+            dao.updateCustomerFinancials(oldCustId, -oldInvoice.remainingAmount, -oldInvoice.grandTotal, -oldInvoice.paidAmount)
+        }
+        dao.deleteCustomerTransactionForInvoice(invoice.id)
+
+        // Update invoice and items
+        dao.insertSaleInvoice(invoice) // REPLACE strategy updates it
+        dao.deleteSaleInvoiceItems(invoice.id)
+        dao.insertSaleInvoiceItems(items.map { it.copy(invoiceId = invoice.id) })
+
+        // Apply new stock
+        for (item in items) {
+            item.productId?.let { dao.updateProductStock(it, -item.quantity) }
+        }
+        // Apply new customer financials
+        invoice.customerId?.let { custId ->
+            dao.updateCustomerFinancials(custId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)
+            dao.insertCustomerTransaction(
+                CustomerTransaction(
+                    customerId = custId,
+                    date = invoice.date,
+                    time = invoice.time,
+                    type = "فاتورة مبيعات",
+                    description = "تعديل فاتورة مبيعات #${invoice.invoiceNumber}",
+                    amount = invoice.grandTotal,
+                    paid = invoice.paidAmount,
+                    remaining = invoice.remainingAmount,
+                    invoiceId = invoice.id
+                )
+            )
+        }
+    }
+
+    suspend fun deleteSaleInvoice(invoice: SaleInvoice) {
+        val items = dao.getItemsForSaleInvoiceList(invoice.id)
+        for (item in items) {
+            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+        }
+        invoice.customerId?.let {
+            dao.updateCustomerFinancials(it, -invoice.remainingAmount, -invoice.grandTotal, -invoice.paidAmount)
+        }
+        dao.deleteCustomerTransactionForInvoice(invoice.id)
+        dao.deleteSaleInvoiceItems(invoice.id)
+        dao.deleteSaleInvoice(invoice)
+    }
+
+    fun getItemsForSaleInvoice(invoiceId: Long): Flow<List<SaleInvoiceItem>> = dao.getItemsForSaleInvoice(invoiceId)
+    suspend fun getItemsForSaleInvoiceList(invoiceId: Long): List<SaleInvoiceItem> = dao.getItemsForSaleInvoiceList(invoiceId)
+    fun getSaleInvoicesForCustomer(customerId: Long): Flow<List<SaleInvoice>> = dao.getSaleInvoicesForCustomer(customerId)
+
+    val allPurchaseInvoices: Flow<List<PurchaseInvoice>> = dao.getAllPurchaseInvoices()
+    fun searchPurchaseInvoices(query: String): Flow<List<PurchaseInvoice>> = dao.searchPurchaseInvoices(query)
+    fun getPurchaseInvoicesByDate(date: String): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesByDate(date)
+    fun getPurchaseInvoicesBetweenDates(startDate: String, endDate: String): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesBetweenDates(startDate, endDate)
+    suspend fun getPurchaseInvoiceById(id: Long): PurchaseInvoice? = dao.getPurchaseInvoiceById(id)
+    suspend fun getPurchaseInvoiceCount(): Int = dao.getPurchaseInvoiceCount()
+    fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesForSupplier(supplierId)
+
+    suspend fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>): Long {
+        val invoiceId = dao.insertPurchaseInvoice(invoice)
+        dao.insertPurchaseInvoiceItems(items.map { it.copy(invoiceId = invoiceId) })
+        for (item in items) {
+            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+        }
+        invoice.supplierId?.let { suppId ->
+            dao.updateSupplierFinancials(suppId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)
+            dao.insertSupplierTransaction(
+                SupplierTransaction(
+                    supplierId = suppId,
+                    date = invoice.date,
+                    time = invoice.time,
+                    type = "فاتورة مشتريات",
+                    description = "فاتورة مشتريات #${invoice.invoiceNumber}",
+                    amount = invoice.grandTotal,
+                    paid = invoice.paidAmount,
+                    remaining = invoice.remainingAmount,
+                    invoiceId = invoiceId
+                )
+            )
+        }
+        return invoiceId
+    }
+
+    suspend fun deletePurchaseInvoice(invoice: PurchaseInvoice) {
+        val items = dao.getItemsForPurchaseInvoiceList(invoice.id)
+        for (item in items) {
+            item.productId?.let { dao.updateProductStock(it, -item.quantity) }
+        }
+        invoice.supplierId?.let { suppId ->
+            dao.updateSupplierFinancials(suppId, -invoice.remainingAmount, -invoice.grandTotal, -invoice.paidAmount)
+            dao.getTransactionsForSupplierList(suppId).filter { it.invoiceId == invoice.id }.forEach { dao.deleteSupplierTransaction(it) }
+        }
+        dao.deletePurchaseInvoiceItems(invoice.id)
+        dao.deletePurchaseInvoice(invoice)
+    }
+
+    fun getItemsForPurchaseInvoice(invoiceId: Long): Flow<List<PurchaseInvoiceItem>> = dao.getItemsForPurchaseInvoice(invoiceId)
+    suspend fun getItemsForPurchaseInvoiceList(invoiceId: Long): List<PurchaseInvoiceItem> = dao.getItemsForPurchaseInvoiceList(invoiceId)
+
+    fun getTransactionsForCustomer(customerId: Long): Flow<List<CustomerTransaction>> = dao.getTransactionsForCustomer(customerId)
+    suspend fun addCustomerPayment(customerId: Long, amount: Double, date: String, time: String, note: String): Long {
+        dao.updateCustomerFinancials(customerId, -amount, 0.0, amount)
+        return dao.insertCustomerTransaction(
+            CustomerTransaction(
+                customerId = customerId,
+                date = date,
+                time = time,
+                type = "سند قبض",
+                description = if (note.isNotBlank()) "سند قبض: $note" else "سند قبض نقدي",
+                amount = 0.0,
+                paid = amount,
+                remaining = 0.0
+            )
+        )
+    }
+
+    fun getTransactionsForSupplier(supplierId: Long): Flow<List<SupplierTransaction>> = dao.getTransactionsForSupplier(supplierId)
+    suspend fun addSupplierPayment(supplierId: Long, amount: Double, date: String, time: String, note: String): Long {
+        dao.updateSupplierFinancials(supplierId, -amount, 0.0, amount)
+        return dao.insertSupplierTransaction(
+            SupplierTransaction(
+                supplierId = supplierId,
+                date = date,
+                time = time,
+                type = "سند صرف",
+                description = if (note.isNotBlank()) "سند صرف للمورد: $note" else "دفعة نقدية للمورد",
+                amount = 0.0,
+                paid = amount,
+                remaining = 0.0
+            )
+        )
+    }
+
+    val allExpenses: Flow<List<Expense>> = dao.getAllExpenses()
+    fun getExpensesByDate(date: String): Flow<List<Expense>> = dao.getExpensesByDate(date)
+    fun getExpensesBetweenDates(startDate: String, endDate: String): Flow<List<Expense>> = dao.getExpensesBetweenDates(startDate, endDate)
+    fun getTodayExpensesSum(date: String): Flow<Double> = dao.getTodayExpensesSum(date)
+    suspend fun insertExpense(expense: Expense): Long = dao.insertExpense(expense)
+    suspend fun updateExpense(expense: Expense) = dao.updateExpense(expense)
+    suspend fun deleteExpense(expense: Expense) = dao.deleteExpense(expense)
+
+    fun getTodaySalesTotal(date: String): Flow<Double> = dao.getTodaySalesTotal(date)
+    fun getTodayPurchasesTotal(date: String): Flow<Double> = dao.getTodayPurchasesTotal(date)
 }

@@ -316,7 +316,7 @@ fun PurchasesScreen(
                             ) {
                                 UnifiedOutlinedTextField(
                                     value = totalText,
-                                    onValueChange = { totalText = it },
+                                    onValueChange = { totalText = Formatters.englishDigits(it) },
                                     label = { Text("الإجمالي") },
                                     placeholder = { Text("0") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -327,7 +327,7 @@ fun PurchasesScreen(
                                 )
                                 UnifiedOutlinedTextField(
                                     value = qtyText,
-                                    onValueChange = { qtyText = it },
+                                    onValueChange = { qtyText = Formatters.englishDigits(it) },
                                     label = { Text("العدد") },
                                     placeholder = { Text("1") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -719,7 +719,7 @@ fun PurchasesScreen(
                     Text("المستحق له حالياً: ${Formatters.formatMoney(supplier.balance)}", color = MaterialTheme.colorScheme.error)
                     UnifiedOutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { amountText = Formatters.englishDigits(it) },
                         label = { Text("المبلغ المدفوع *") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
