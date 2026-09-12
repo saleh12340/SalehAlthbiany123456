@@ -1,21 +1,22 @@
 package com.example.ui.screens
 
-import com.example.ui.screens.UnifiedOutlinedTextField
-
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -23,11 +24,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.entities.Product
 import com.example.ui.components.AppSearchBar
 import com.example.ui.components.EmptyStateView
+import com.example.ui.theme.GroceryGreenPrimary
 import com.example.ui.viewmodel.GroceryViewModel
 import com.example.util.Formatters
+
+private val ProductGreen = Color(0xFF0E6B38)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,11 +45,37 @@ fun ProductsScreen(
     val products by viewModel.products.collectAsState()
     val searchQuery by viewModel.productSearchQuery.collectAsState()
 
+    val lowStockCount = remember(products) {
+        products.count { it.quantity <= it.minStock }
+    }
+
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingProduct by remember { mutableStateOf<Product?>(null) }
     var deletingProduct by remember { mutableStateOf<Product?>(null) }
+    var adjustStockProduct by remember { mutableStateOf<Product?>(null) }
+    var filterCategory by remember { mutableStateOf("الكل") }
 
-    // Add / Edit Product Dialog
+    val totalInventoryValue = remember(products) {
+        products.sumOf { it.price * it.quantity }
+    }
+
+    val filteredProducts = remember(products, searchQuery, filterCategory) {
+        products.filter { p ->
+            val matchesQuery = searchQuery.isBlank() ||
+                    p.name.contains(searchQuery, true) ||
+                    p.barcode.contains(searchQuery, true)
+            val matchesCategory = when (filterCategory) {
+                "نقص المخزون" -> p.quantity <= p.minStock
+                "متوفر" -> p.quantity > p.minStock
+                else -> true
+            }
+            matchesQuery && matchesCategory
+        }
+    }
+
+    // ==========================================
+    // ADD / EDIT PRODUCT DIALOG
+    // ==========================================
     if (showAddEditDialog) {
         var name by remember { mutableStateOf(editingProduct?.name ?: "") }
         var barcode by remember { mutableStateOf(editingProduct?.barcode ?: "") }
@@ -54,132 +86,282 @@ fun ProductsScreen(
         var unit by remember { mutableStateOf(editingProduct?.unit ?: "حبة") }
         var category by remember { mutableStateOf(editingProduct?.category ?: "عام") }
 
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showAddEditDialog = false },
-            title = {
-                Text(
-                    text = if (editingProduct == null) "إضافة منتج جديد" else "تعديل المنتج",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.88f),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = ProductGreen.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = if (editingProduct == null) "منتج جديد" else "تعديل منتج",
+                                color = ProductGreen,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                        Text(
+                            text = if (editingProduct == null) "إضافة صنف للمخزن" else "تعديل بيانات الصنف",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+
+                    // Card Container for Inputs
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                        border = BorderStroke(1.dp, Color(0xFFDDE7E0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "البيانات الأساسية للصنف",
+                                fontWeight = FontWeight.Bold,
+                                color = ProductGreen,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+
+                            UnifiedOutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("اسم المنتج / الصنف *") },
+                                placeholder = { Text("مثال: أرز الشعلان 10 كجم") },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("product_name_input")
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                UnifiedOutlinedTextField(
+                                    value = barcode,
+                                    onValueChange = { barcode = it },
+                                    label = { Text("الباركود (اختياري)") },
+                                    placeholder = { Text("أدخل أو امسح الباركود") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1.2f)
+                                )
+                                UnifiedOutlinedTextField(
+                                    value = unit,
+                                    onValueChange = { unit = it },
+                                    label = { Text("الوحدة") },
+                                    placeholder = { Text("حبة / كيس / كرتون") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(0.8f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Card for Pricing & Stock
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                        border = BorderStroke(1.dp, Color(0xFFDDE7E0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "التسعير والكميات",
+                                fontWeight = FontWeight.Bold,
+                                color = ProductGreen,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                UnifiedOutlinedTextField(
+                                    value = priceText,
+                                    onValueChange = { priceText = it },
+                                    label = { Text("سعر البيع *") },
+                                    placeholder = { Text("0.00") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("product_price_input")
+                                )
+                                UnifiedOutlinedTextField(
+                                    value = costPriceText,
+                                    onValueChange = { costPriceText = it },
+                                    label = { Text("سعر التكلفة (الشراء)") },
+                                    placeholder = { Text("0.00") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                UnifiedOutlinedTextField(
+                                    value = quantityText,
+                                    onValueChange = { quantityText = it },
+                                    label = { Text("الكمية المتوفرة *") },
+                                    placeholder = { Text("10") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("product_qty_input")
+                                )
+                                UnifiedOutlinedTextField(
+                                    value = minStockText,
+                                    onValueChange = { minStockText = it },
+                                    label = { Text("حد التنبيه الأدنى") },
+                                    placeholder = { Text("5") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Dialog Actions
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { showAddEditDialog = false },
+                            modifier = Modifier.weight(0.4f)
+                        ) {
+                            Text("إلغاء")
+                        }
+                        Button(
+                            onClick = {
+                                val p = priceText.toDoubleOrNull() ?: 0.0
+                                val cost = costPriceText.toDoubleOrNull() ?: 0.0
+                                val qty = quantityText.toDoubleOrNull() ?: 0.0
+                                val minStk = minStockText.toDoubleOrNull() ?: 5.0
+
+                                if (name.isBlank() || p <= 0) {
+                                    Toast.makeText(context, "يرجى كتابة اسم المنتج وسعر البيع بشكل صحيح", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                val prod = editingProduct?.copy(
+                                    name = name.trim(),
+                                    barcode = barcode.trim(),
+                                    price = p,
+                                    costPrice = cost,
+                                    quantity = qty,
+                                    minStock = minStk,
+                                    unit = unit.trim(),
+                                    category = category.trim(),
+                                    updatedAt = System.currentTimeMillis()
+                                ) ?: Product(
+                                    name = name.trim(),
+                                    barcode = barcode.trim(),
+                                    price = p,
+                                    costPrice = cost,
+                                    quantity = qty,
+                                    minStock = minStk,
+                                    unit = unit.trim(),
+                                    category = category.trim()
+                                )
+
+                                viewModel.saveProduct(prod) {
+                                    showAddEditDialog = false
+                                    Toast.makeText(context, "تم حفظ المنتج بنجاح في المخزون", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ProductGreen),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .height(48.dp)
+                        ) {
+                            Text("حفظ في المخزون", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Quick stock adjust dialog
+    adjustStockProduct?.let { product ->
+        var adjustmentQty by remember { mutableStateOf(product.quantity.toString()) }
+        AlertDialog(
+            onDismissRequest = { adjustStockProduct = null },
+            title = { Text("تعديل كمية المخزون", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("الصنف: ${product.name}")
                     UnifiedOutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("اسم المنتج *") },
+                        value = adjustmentQty,
+                        onValueChange = { adjustmentQty = it },
+                        label = { Text("الكمية الفعلية الجديدة") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("product_name_input")
+                        modifier = Modifier.fillMaxWidth()
                     )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        UnifiedOutlinedTextField(
-                            value = barcode,
-                            onValueChange = { barcode = it },
-                            label = { Text("الباركود (اختياري)") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        UnifiedOutlinedTextField(
-                            value = unit,
-                            onValueChange = { unit = it },
-                            label = { Text("الوحدة") },
-                            placeholder = { Text("حبة/كيس/كرتون") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        UnifiedOutlinedTextField(
-                            value = priceText,
-                            onValueChange = { priceText = it },
-                            label = { Text("سعر البيع *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f).testTag("product_price_input")
-                        )
-                        UnifiedOutlinedTextField(
-                            value = costPriceText,
-                            onValueChange = { costPriceText = it },
-                            label = { Text("سعر التكلفة") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        UnifiedOutlinedTextField(
-                            value = quantityText,
-                            onValueChange = { quantityText = it },
-                            label = { Text("الكمية المتوفرة *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f).testTag("product_qty_input")
-                        )
-                        UnifiedOutlinedTextField(
-                            value = minStockText,
-                            onValueChange = { minStockText = it },
-                            label = { Text("حد التنبيه الأدنى") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val p = priceText.toDoubleOrNull() ?: 0.0
-                        val cost = costPriceText.toDoubleOrNull() ?: 0.0
-                        val qty = quantityText.toDoubleOrNull() ?: 0.0
-                        val minStk = minStockText.toDoubleOrNull() ?: 5.0
-
-                        if (name.isBlank() || p <= 0) {
-                            Toast.makeText(context, "يرجى كتابة اسم المنتج وسعر البيع بشكل صحيح", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        val prod = editingProduct?.copy(
-                            name = name.trim(),
-                            barcode = barcode.trim(),
-                            price = p,
-                            costPrice = cost,
-                            quantity = qty,
-                            minStock = minStk,
-                            unit = unit.trim(),
-                            category = category.trim(),
-                            updatedAt = System.currentTimeMillis()
-                        ) ?: Product(
-                            name = name.trim(),
-                            barcode = barcode.trim(),
-                            price = p,
-                            costPrice = cost,
-                            quantity = qty,
-                            minStock = minStk,
-                            unit = unit.trim(),
-                            category = category.trim()
-                        )
-
-                        viewModel.saveProduct(prod) {
-                            showAddEditDialog = false
-                            Toast.makeText(context, "تم حفظ المنتج بنجاح", Toast.LENGTH_SHORT).show()
+                        val newQty = adjustmentQty.toDoubleOrNull()
+                        if (newQty != null) {
+                            viewModel.saveProduct(product.copy(quantity = newQty, updatedAt = System.currentTimeMillis())) {
+                                adjustStockProduct = null
+                                Toast.makeText(context, "تم تحديث كمية الصنف", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
-                    modifier = Modifier.testTag("save_product_btn")
+                    colors = ButtonDefaults.buttonColors(containerColor = ProductGreen)
                 ) {
-                    Text("حفظ")
+                    Text("تأكيد التعديل")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddEditDialog = false }) {
+                TextButton(onClick = { adjustStockProduct = null }) {
                     Text("إلغاء")
                 }
             }
@@ -190,17 +372,18 @@ fun ProductsScreen(
     deletingProduct?.let { product ->
         AlertDialog(
             onDismissRequest = { deletingProduct = null },
-            title = { Text("حذف المنتج") },
-            text = { Text("هل أنت متأكد من حذف «${product.name}» من المخزون؟") },
+            title = { Text("حذف المنتج", fontWeight = FontWeight.Bold) },
+            text = { Text("هل أنت متأكد من حذف الصنف «${product.name}» من المخزون نهائياً؟") },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         viewModel.deleteProduct(product)
                         deletingProduct = null
-                        Toast.makeText(context, "تم حذف المنتج", Toast.LENGTH_SHORT).show()
-                    }
+                        Toast.makeText(context, "تم حذف الصنف من المخزون", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("حذف", color = MaterialTheme.colorScheme.error)
+                    Text("حذف")
                 }
             },
             dismissButton = {
@@ -217,17 +400,15 @@ fun ProductsScreen(
                 title = { Text("المنتجات والمخزون", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowForward, contentDescription = "رجوع")
+                        Icon(Icons.Default.ArrowForward, "رجوع")
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            editingProduct = null
-                            showAddEditDialog = true
-                        }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "إضافة منتج")
+                    IconButton(onClick = {
+                        editingProduct = null
+                        showAddEditDialog = true
+                    }) {
+                        Icon(Icons.Default.Add, "إضافة صنف")
                     }
                 }
             )
@@ -238,14 +419,14 @@ fun ProductsScreen(
                     editingProduct = null
                     showAddEditDialog = true
                 },
-                containerColor = MaterialTheme.colorScheme.primary,
+                containerColor = ProductGreen,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.testTag("add_product_fab")
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("إضافة منتج", fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.Add, null)
+                Spacer(Modifier.width(8.dp))
+                Text("إضافة صنف", fontWeight = FontWeight.Bold)
             }
         }
     ) { paddingValues ->
@@ -253,95 +434,175 @@ fun ProductsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Top Summary Banner Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                border = BorderStroke(1.dp, Color(0xFFD5E6DA)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(ProductGreen.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Inventory2, null, tint = ProductGreen, modifier = Modifier.size(24.dp))
+                        }
+                        Column {
+                            Text("إجمالي الأصناف", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${products.size} صنف بالمخزن",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = ProductGreen
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        if (lowStockCount > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFFEBEE)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Default.Warning, null, tint = Color(0xFFC62828), modifier = Modifier.size(14.dp))
+                                    Text("$lowStockCount نقص مخزون", color = Color(0xFFC62828), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        } else {
+                            Text("المخزون ممتاز", color = ProductGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(
+                            "القيمة: ${Formatters.formatMoney(totalInventoryValue)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Search Bar
             AppSearchBar(
                 query = searchQuery,
                 onQueryChange = { viewModel.productSearchQuery.value = it },
                 placeholder = "بحث باسم الصنف أو الباركود...",
-                modifier = Modifier.padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 testTag = "products_search_bar"
             )
 
-            if (products.isEmpty()) {
+            // Category Filter Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("الكل", "نقص المخزون", "متوفر").forEach { filter ->
+                    FilterChip(
+                        selected = filterCategory == filter,
+                        onClick = { filterCategory = filter },
+                        label = { Text(filter) }
+                    )
+                }
+            }
+
+            // Products List
+            if (filteredProducts.isEmpty()) {
                 EmptyStateView(
-                    title = "لا توجد منتجات بالمخزون",
-                    message = if (searchQuery.isNotBlank()) "لم نجد نتائج مطابقة لبحثك" else "أضف منتجاتك لتسهيل عملية البيع وإدارة المخزون",
+                    title = "لا توجد أصناف بالمخزون",
+                    message = if (searchQuery.isNotBlank()) "لم يتم العثور على صنف يطابق البحث" else "اضغط على «إضافة صنف» لتسجيل الأصناف وأسعارها",
                     icon = Icons.Default.Inventory2,
                     modifier = Modifier.weight(1f)
                 )
             } else {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 84.dp)
                 ) {
-                    items(products, key = { it.id }) { product ->
+                    items(filteredProducts, key = { it.id }) { product ->
                         val isLowStock = product.quantity <= product.minStock
 
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // Product Name, Unit & Stock Badge
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = product.name,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (product.barcode.isNotBlank()) {
-                                            Text(
-                                                text = "باركود: ${product.barcode}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    if (isLowStock) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
-                                            color = Color(0xFFFFEBEE)
+                                            color = ProductGreen.copy(alpha = 0.1f)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Warning,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFFC62828),
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Text(
-                                                    text = "نقص مخزون",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFFC62828)
-                                                )
+                                            Text(
+                                                text = product.unit.ifBlank { "حبة" },
+                                                color = ProductGreen,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                        Column {
+                                            Text(product.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            if (product.barcode.isNotBlank()) {
+                                                Text("باركود: ${product.barcode}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                     }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isLowStock) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                                    ) {
+                                        Text(
+                                            text = if (isLowStock) "نقص: ${Formatters.formatNumber(product.quantity)}" else "متوفر: ${Formatters.formatNumber(product.quantity)}",
+                                            color = if (isLowStock) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
 
-                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                HorizontalDivider(color = Color(0xFFF0F4F1))
 
+                                // Price & Cost Details
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -349,30 +610,27 @@ fun ProductsScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = "السعر: ${Formatters.formatMoney(product.price)}",
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            text = "سعر البيع: ${Formatters.formatMoney(product.price)}",
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = ProductGreen,
+                                            style = MaterialTheme.typography.bodyMedium
                                         )
-                                        Text(
-                                            text = "الكمية: ${Formatters.formatNumber(product.quantity)} ${product.unit}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isLowStock) Color(0xFFC62828) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        if (product.costPrice > 0) {
+                                            Text(
+                                                text = "التكلفة: ${Formatters.formatMoney(product.costPrice)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
 
-                                    // Actions: Quick stock increment, Edit, Delete
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = { viewModel.updateStock(product.id, 5.0) },
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.height(32.dp)
+                                    // Action buttons
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        IconButton(
+                                            onClick = { adjustStockProduct = product },
+                                            modifier = Modifier.size(34.dp)
                                         ) {
-                                            Text("+5 ${product.unit}", style = MaterialTheme.typography.labelSmall)
+                                            Icon(Icons.Default.Tune, "تعديل الكمية", tint = ProductGreen, modifier = Modifier.size(18.dp))
                                         }
 
                                         IconButton(
@@ -380,16 +638,16 @@ fun ProductsScreen(
                                                 editingProduct = product
                                                 showAddEditDialog = true
                                             },
-                                            modifier = Modifier.size(36.dp)
+                                            modifier = Modifier.size(34.dp)
                                         ) {
-                                            Icon(Icons.Default.Edit, contentDescription = "تعديل", tint = MaterialTheme.colorScheme.primary)
+                                            Icon(Icons.Default.Edit, "تعديل البيانات", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         }
 
                                         IconButton(
                                             onClick = { deletingProduct = product },
-                                            modifier = Modifier.size(36.dp)
+                                            modifier = Modifier.size(34.dp)
                                         ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
+                                            Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                                         }
                                     }
                                 }

@@ -5,11 +5,14 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,6 +25,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.entities.Customer
 import com.example.data.local.entities.CustomerTransaction
 import com.example.data.local.entities.SaleInvoice
@@ -34,21 +40,41 @@ import com.example.util.Formatters
 import com.example.util.PdfReceiptGenerator
 import com.example.util.ReceiptShareHelper
 
+private val CustomerGreen = Color(0xFF0E6B38)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
+fun CustomersScreen(
+    viewModel: GroceryViewModel,
+    onNavigateBack: () -> Unit
+) {
     val context = LocalContext.current
     val customers by viewModel.customers.collectAsState()
     val totalDebts by viewModel.totalCustomerDebts.collectAsState()
     val searchQuery by viewModel.customerSearchQuery.collectAsState()
 
     var showAddEdit by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<Customer?>(null) }
-    var selectedCustomer by remember { mutableStateOf<Customer?>(null) }
+    var editingCustomer by remember { mutableStateOf<Customer?>(null) }
+    var selectedCustomerForDetail by remember { mutableStateOf<Customer?>(null) }
     var selectedInvoiceForDetail by remember { mutableStateOf<SaleInvoice?>(null) }
     var paymentCustomer by remember { mutableStateOf<Customer?>(null) }
     var deleteCustomer by remember { mutableStateOf<Customer?>(null) }
-    var deleteTransaction by remember { mutableStateOf<CustomerTransaction?>(null) }
+    var filterType by remember { mutableStateOf("الكل") }
+
+    val filteredCustomers = remember(customers, searchQuery, filterType) {
+        customers.filter { c ->
+            val matchesQuery = searchQuery.isBlank() ||
+                    c.name.contains(searchQuery, true) ||
+                    c.phone.contains(searchQuery) ||
+                    c.address.contains(searchQuery, true)
+            val matchesFilter = when (filterType) {
+                "عليهم ديون" -> c.balance > 0
+                "خالصين" -> c.balance <= 0
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
+    }
 
     // Invoice Detail Dialog
     selectedInvoiceForDetail?.let { invoice ->
@@ -59,140 +85,217 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
         )
     }
 
+    // ==========================================
+    // ADD / EDIT CUSTOMER DIALOG
+    // ==========================================
     if (showAddEdit) {
-        var name by remember { mutableStateOf(editing?.name ?: "") }
-        var phone by remember { mutableStateOf(editing?.phone ?: "") }
-        var address by remember { mutableStateOf(editing?.address ?: "") }
-        var balance by remember { mutableStateOf(if (editing == null) "0" else editing!!.balance.toString()) }
-        var notes by remember { mutableStateOf(editing?.notes ?: "") }
+        var name by remember { mutableStateOf(editingCustomer?.name ?: "") }
+        var phone by remember { mutableStateOf(editingCustomer?.phone ?: "") }
+        var address by remember { mutableStateOf(editingCustomer?.address ?: "") }
+        var balance by remember { mutableStateOf(if (editingCustomer == null) "0" else editingCustomer!!.balance.toString()) }
+        var notes by remember { mutableStateOf(editingCustomer?.notes ?: "") }
 
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showAddEdit = false },
-            title = {
-                Text(
-                    if (editing == null) "إضافة عميل جديد" else "تعديل بيانات العميل",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, GroceryGreenPrimary),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.85f),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = CustomerGreen.copy(alpha = 0.12f)
                         ) {
+                            Text(
+                                text = if (editingCustomer == null) "عميل جديد" else "تعديل عميل",
+                                color = CustomerGreen,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                        Text(
+                            text = if (editingCustomer == null) "إضافة عميل جديد" else "تعديل بيانات العميل",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+
+                    // Form Container Card
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                        border = BorderStroke(1.dp, Color(0xFFDDE7E0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "بيانات العميل والحساب",
+                                fontWeight = FontWeight.Bold,
+                                color = CustomerGreen,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+
                             UnifiedOutlinedTextField(
                                 value = name,
                                 onValueChange = { name = it },
                                 label = { Text("اسم العميل *") },
+                                placeholder = { Text("مثال: محمد أحمد علي") },
                                 singleLine = true,
-                                modifier = Modifier.weight(1.25f).testTag("cust_name_input")
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("cust_name_input")
                             )
+
                             UnifiedOutlinedTextField(
                                 value = phone,
                                 onValueChange = { phone = it },
                                 label = { Text("رقم الهاتف") },
+                                placeholder = { Text("77xxxxxxx") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 singleLine = true,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
-                        }
-                        UnifiedOutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            label = { Text("العنوان / الحي") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (editing == null) {
+
                             UnifiedOutlinedTextField(
-                                value = balance,
-                                onValueChange = { balance = it },
-                                label = { Text("الرصيد السابق (دين العميل)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                value = address,
+                                onValueChange = { address = it },
+                                label = { Text("العنوان / الحي (اختياري)") },
+                                placeholder = { Text("مثال: شارع الستين") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            if (editingCustomer == null) {
+                                UnifiedOutlinedTextField(
+                                    value = balance,
+                                    onValueChange = { balance = it },
+                                    label = { Text("الرصيد السابق (دين العميل الافتتاحي)") },
+                                    placeholder = { Text("0.00") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            UnifiedOutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("ملاحظات") },
+                                placeholder = { Text("ملاحظات إضافية") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                        UnifiedOutlinedTextField(
-                            value = notes,
-                            onValueChange = { notes = it },
-                            label = { Text("ملاحظات") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    }
+
+                    // Dialog Actions
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { showAddEdit = false },
+                            modifier = Modifier.weight(0.4f)
+                        ) {
+                            Text("إلغاء")
+                        }
+                        Button(
+                            onClick = {
+                                if (name.isBlank()) {
+                                    Toast.makeText(context, "يرجى إدخال اسم العميل", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                val opening = balance.toDoubleOrNull() ?: 0.0
+                                val customer = editingCustomer?.copy(
+                                    name = name.trim(),
+                                    phone = phone.trim(),
+                                    address = address.trim(),
+                                    notes = notes.trim()
+                                ) ?: Customer(
+                                    name = name.trim(),
+                                    phone = phone.trim(),
+                                    address = address.trim(),
+                                    balance = opening,
+                                    notes = notes.trim()
+                                )
+                                viewModel.saveCustomer(customer) {
+                                    showAddEdit = false
+                                    Toast.makeText(context, "تم حفظ بيانات العميل بنجاح", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CustomerGreen),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .height(48.dp)
+                        ) {
+                            Text("حفظ العميل", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (name.isBlank()) {
-                            Toast.makeText(context, "يرجى إدخال اسم العميل", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val opening = balance.toDoubleOrNull() ?: 0.0
-                        val customer = editing?.copy(
-                            name = name.trim(),
-                            phone = phone.trim(),
-                            address = address.trim(),
-                            notes = notes.trim()
-                        ) ?: Customer(
-                            name = name.trim(),
-                            phone = phone.trim(),
-                            address = address.trim(),
-                            balance = opening,
-                            notes = notes.trim()
-                        )
-                        viewModel.saveCustomer(customer) {
-                            showAddEdit = false
-                            Toast.makeText(context, "تم حفظ بيانات العميل بنجاح", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("حفظ", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddEdit = false }) {
-                    Text("إلغاء")
-                }
             }
-        )
+        }
     }
 
+    // ==========================================
+    // PAYMENT / RECEIPT DIALOG (سند قبض من عميل)
+    // ==========================================
     paymentCustomer?.let { customer ->
-        var amount by remember { mutableStateOf("") }
-        var note by remember { mutableStateOf("") }
+        var amountText by remember { mutableStateOf("") }
+        var notesText by remember { mutableStateOf("") }
+
         AlertDialog(
             onDismissRequest = { paymentCustomer = null },
-            title = { Text("سند قبض / استلام دفعة من العميل", fontWeight = FontWeight.Bold) },
+            title = {
+                Text("تسجيل سند قبض (سداد دين)", fontWeight = FontWeight.Bold)
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("العميل: ${customer.name}", fontWeight = FontWeight.Bold)
-                    Text("الرصيد المدين الحالي: ${Formatters.formatMoney(customer.balance)}", color = MaterialTheme.colorScheme.error)
+                    Text("الرصيد المستحق (الدين): ${Formatters.formatMoney(customer.balance)}", color = MaterialTheme.colorScheme.error)
+
                     UnifiedOutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it },
+                        value = amountText,
+                        onValueChange = { amountText = it },
                         label = { Text("المبلغ المقبوض *") },
+                        placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("payment_amount_input")
+                        modifier = Modifier.fillMaxWidth()
                     )
+
                     UnifiedOutlinedTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        label = { Text("البيان / ملاحظات القبض") },
+                        value = notesText,
+                        onValueChange = { notesText = it },
+                        label = { Text("ملاحظات السند") },
+                        placeholder = { Text("دفعة نقدية / سداد حساب") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -201,18 +304,23 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
             confirmButton = {
                 Button(
                     onClick = {
-                        val value = amount.toDoubleOrNull() ?: 0.0
-                        if (value <= 0) {
+                        val amount = amountText.toDoubleOrNull()
+                        if (amount == null || amount <= 0) {
                             Toast.makeText(context, "أدخل مبلغاً صحيحاً", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        viewModel.addCustomerPayment(customer.id, value, note) {
+                        viewModel.addCustomerPayment(
+                            customerId = customer.id,
+                            amount = amount,
+                            note = notesText.ifBlank { "سداد دين" }
+                        ) {
                             paymentCustomer = null
-                            Toast.makeText(context, "تم تسجيل سند القبض وتحديث الرصيد", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "تم تسجيل سند القبض بنجاح وتحديث الرصيد", Toast.LENGTH_SHORT).show()
                         }
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CustomerGreen)
                 ) {
-                    Text("تسجيل الدفعة")
+                    Text("حفظ السند")
                 }
             },
             dismissButton = {
@@ -223,204 +331,194 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
         )
     }
 
-    deleteCustomer?.let { customer ->
-        AlertDialog(
-            onDismissRequest = { deleteCustomer = null },
-            title = { Text("حذف حساب العميل") },
-            text = { Text("سيتم حذف سجل حركات الحساب وإلغاء ربط الفواتير السابقة بهذا العميل. هل تريد المتابعة؟") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteCustomer(customer) {
-                            deleteCustomer = null
-                            selectedCustomer = null
-                            Toast.makeText(context, "تم حذف حساب العميل", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                ) {
-                    Text("حذف الحساب", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteCustomer = null }) {
-                    Text("إلغاء")
-                }
-            }
-        )
-    }
-
-    deleteTransaction?.let { tx ->
-        AlertDialog(
-            onDismissRequest = { deleteTransaction = null },
-            title = { Text("حذف حركة الحساب") },
-            text = { Text("سيتم عكس أثر هذه الحركة على رصيد العميل ثم حذفها نهائياً.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteCustomerTransaction(tx) {
-                            deleteTransaction = null
-                            Toast.makeText(context, "تم حذف الحركة وتحديث الرصيد", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                ) {
-                    Text("حذف", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteTransaction = null }) {
-                    Text("إلغاء")
-                }
-            }
-        )
-    }
-
-    // Customer Detail & Account Statement Dialog
-    selectedCustomer?.let { customer ->
+    // ==========================================
+    // CUSTOMER DETAILS & STATEMENT DIALOG
+    // ==========================================
+    selectedCustomerForDetail?.let { customer ->
+        var detailTab by remember { mutableIntStateOf(0) }
         val transactions by viewModel.getCustomerTransactions(customer.id).collectAsState(initial = emptyList())
         val customerInvoices by viewModel.getSaleInvoicesForCustomer(customer.id).collectAsState(initial = emptyList())
-        var customerTab by remember { mutableIntStateOf(0) }
 
-        AlertDialog(
-            onDismissRequest = { selectedCustomer = null },
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(customer.name, fontWeight = FontWeight.Bold)
-                        Text(if (customer.phone.isBlank()) "بدون رقم هاتف" else customer.phone, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Row {
-                        if (customer.phone.isNotBlank()) {
-                            IconButton(onClick = {
-                                try {
-                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${customer.phone}"))
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {}
-                            }) {
-                                Icon(Icons.Default.Phone, "اتصال", tint = GroceryGreenPrimary)
-                            }
-                        }
-                        IconButton(onClick = {
-                            val file = PdfReceiptGenerator.generateCustomerStatementPdf(context, customer, transactions)
-                            if (file != null) {
-                                PdfReceiptGenerator.sharePdf(context, file, "كشف حساب ${customer.name}")
-                            } else {
-                                Toast.makeText(context, "تعذر إنشاء PDF", Toast.LENGTH_SHORT).show()
-                            }
-                        }) {
-                            Icon(Icons.Default.PictureAsPdf, "تصدير PDF")
-                        }
-                        IconButton(onClick = {
-                            ReceiptShareHelper.shareCustomerStatementToWhatsApp(context, customer, transactions)
-                        }) {
-                            Icon(Icons.Default.Share, "مشاركة وإرسال")
-                        }
-                    }
-                }
-            },
-            text = {
+        Dialog(
+            onDismissRequest = { selectedCustomerForDetail = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.92f),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 480.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Balance Banner
-                    Card(
+                    // Header with Quick Action Icons
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF4F8F5)),
-                        border = BorderStroke(1.dp, Color(0xFFD4E3D8))
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        IconButton(onClick = { selectedCustomerForDetail = null }) {
+                            Icon(Icons.Default.Close, "إغلاق")
+                        }
+
+                        Text(
+                            text = customer.name,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+
+                    // Info Card with WhatsApp, Call, PDF
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
+                        border = BorderStroke(1.dp, Color(0xFFD5E6DA)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column {
-                                Text("الرصيد المدين (لنا)", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    text = Formatters.formatMoney(customer.balance),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (customer.balance > 0) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)
-                                )
-                            }
-                            Button(
-                                onClick = {
-                                    paymentCustomer = customer
-                                },
-                                shape = RoundedCornerShape(8.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AddCard, null, Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("سند قبض")
+                                Column {
+                                    if (customer.phone.isNotBlank()) {
+                                        Text("الهاتف: ${customer.phone}", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (customer.address.isNotBlank()) {
+                                        Text("العنوان: ${customer.address}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (customer.phone.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${customer.phone}"))
+                                                context.startActivity(intent)
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.Phone, "اتصال", tint = CustomerGreen)
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                val uri = Uri.parse("https://api.whatsapp.com/send?phone=${customer.phone}")
+                                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                                context.startActivity(intent)
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.Share, "واتساب", tint = Color(0xFF25D366))
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            PdfReceiptGenerator.generateCustomerStatementPdf(context, customer, transactions)
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(Icons.Default.PictureAsPdf, "تصدير PDF", tint = Color(0xFFD32F2F))
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = Color(0xFFE4EBE6))
+
+                            // Current Balance and Quick Payment
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("الرصيد المستحق (الدين):", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        text = Formatters.formatMoney(customer.balance),
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = if (customer.balance > 0) MaterialTheme.colorScheme.error else CustomerGreen
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { paymentCustomer = customer },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CustomerGreen),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Payment, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("سند قبض جديد", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
 
-                    // Tabs: Transactions vs Invoices
+                    // Tabs: الحركات والسندات / فواتير المبيعات
                     TabRow(
-                        selectedTabIndex = customerTab,
-                        containerColor = MaterialTheme.colorScheme.surface
+                        selectedTabIndex = detailTab,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        contentColor = CustomerGreen,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Tab(
-                            selected = customerTab == 0,
-                            onClick = { customerTab = 0 },
+                            selected = detailTab == 0,
+                            onClick = { detailTab = 0 },
                             text = { Text("الحركات والسندات (${transactions.size})", fontWeight = FontWeight.Bold) }
                         )
                         Tab(
-                            selected = customerTab == 1,
-                            onClick = { customerTab = 1 },
+                            selected = detailTab == 1,
+                            onClick = { detailTab = 1 },
                             text = { Text("فواتير المبيعات (${customerInvoices.size})", fontWeight = FontWeight.Bold) }
                         )
                     }
 
-                    if (customerTab == 0) {
+                    // Tab Content
+                    if (detailTab == 0) {
                         if (transactions.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("لا توجد حركات مسجلة لهذا العميل")
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text("لا توجد حركات مسجلة للعميل حتى الآن", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
                             LazyColumn(
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(transactions, key = { it.id }) { tx ->
+                                items(transactions) { tx ->
                                     Card(
                                         shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(10.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(tx.description, fontWeight = FontWeight.SemiBold)
-                                                Text("${tx.date} ${tx.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    if (tx.amount > 0) {
-                                                        Text("فاتورة: +${Formatters.formatMoney(tx.amount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                                                    }
-                                                    if (tx.paid > 0) {
-                                                        Text("دفعة: -${Formatters.formatMoney(tx.paid)}", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
-                                                    }
-                                                }
+                                            Column {
+                                                Text(tx.type + (if (tx.description.isNotBlank()) " - ${tx.description}" else ""), fontWeight = FontWeight.Bold)
+                                                Text("${tx.date} • ${tx.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            IconButton(onClick = { deleteTransaction = tx }) {
-                                                Icon(Icons.Default.Delete, "حذف الحركة", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                                            }
+                                            val amountDisplay = if (tx.paid > 0) tx.paid else tx.amount
+                                            Text(
+                                                text = (if (tx.paid > 0) "- " else "+ ") + Formatters.formatMoney(amountDisplay),
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (tx.paid > 0) CustomerGreen else MaterialTheme.colorScheme.error
+                                            )
                                         }
                                     }
                                 }
@@ -428,41 +526,35 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                         }
                     } else {
                         if (customerInvoices.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("لا توجد فواتير مبيعات مسجلة لهذا العميل")
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text("لا توجد فواتير مبيعات مرتبطة بهذا العميل", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
                             LazyColumn(
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(customerInvoices, key = { it.id }) { inv ->
+                                items(customerInvoices) { inv ->
                                     Card(
                                         onClick = { selectedInvoiceForDetail = inv },
                                         shape = RoundedCornerShape(10.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(10.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(10.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column {
-                                                Text("فاتورة #${inv.invoiceNumber}", fontWeight = FontWeight.Bold)
-                                                Text("${inv.date} ${inv.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("فاتورة #${inv.invoiceNumber}", fontWeight = FontWeight.Bold, color = CustomerGreen)
+                                                Text("${inv.date} • ${inv.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
-                                                Text(Formatters.formatMoney(inv.grandTotal), fontWeight = FontWeight.Bold, color = GroceryGreenPrimary)
+                                                Text("الإجمالي: ${Formatters.formatMoney(inv.grandTotal)}", fontWeight = FontWeight.Bold)
                                                 if (inv.remainingAmount > 0) {
-                                                    Text("متبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                                    Text("المتبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                                 }
                                             }
                                         }
@@ -472,41 +564,33 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                         }
                     }
                 }
-            },
+            }
+        }
+    }
+
+    // Delete customer confirmation
+    deleteCustomer?.let { customer ->
+        AlertDialog(
+            onDismissRequest = { deleteCustomer = null },
+            title = { Text("حذف العميل", fontWeight = FontWeight.Bold) },
+            text = { Text("هل أنت متأكد من حذف العميل «${customer.name}» وسجل حركاته؟") },
             confirmButton = {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(
-                        onClick = {
-                            paymentCustomer = customer
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.AddCard, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("سند قبض")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.printCustomerStatement(customer, transactions) { ok, msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.weight(1f).testTag("customer_bluetooth_print_button")
-                    ) {
-                        Icon(Icons.Default.Print, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("طباعة بلوتوث")
-                    }
+                Button(
+                    onClick = {
+                        viewModel.deleteCustomer(customer) {
+                            deleteCustomer = null
+                            selectedCustomerForDetail = null
+                            Toast.makeText(context, "تم حذف العميل", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("حذف")
                 }
             },
             dismissButton = {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { deleteCustomer = customer }) {
-                        Text("حذف الحساب", color = MaterialTheme.colorScheme.error)
-                    }
-                    TextButton(onClick = { selectedCustomer = null }) {
-                        Text("إغلاق")
-                    }
+                TextButton(onClick = { deleteCustomer = null }) {
+                    Text("إلغاء")
                 }
             }
         )
@@ -523,10 +607,10 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                 },
                 actions = {
                     IconButton(onClick = {
-                        editing = null
+                        editingCustomer = null
                         showAddEdit = true
                     }) {
-                        Icon(Icons.Default.PersonAdd, "إضافة عميل")
+                        Icon(Icons.Default.Add, "إضافة عميل")
                     }
                 }
             )
@@ -534,13 +618,16 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    editing = null
+                    editingCustomer = null
                     showAddEdit = true
                 },
+                containerColor = CustomerGreen,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.testTag("add_customer_fab")
             ) {
                 Icon(Icons.Default.PersonAdd, null)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("إضافة عميل", fontWeight = FontWeight.Bold)
             }
         }
@@ -549,15 +636,15 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Top Summary Banner Card (Matching Purchases & Sales)
             Card(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
                 border = BorderStroke(1.dp, Color(0xFFD5E6DA)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
@@ -566,83 +653,137 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("إجمالي الديون على العملاء (لنا)", style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            text = Formatters.formatMoney(totalDebts),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(CustomerGreen.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.People, null, tint = CustomerGreen, modifier = Modifier.size(24.dp))
+                        }
+                        Column {
+                            Text("إجمالي العملاء", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${customers.size} عميل مسجل",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = CustomerGreen
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("إجمالي الديون (لنا)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            Formatters.formatMoney(totalDebts),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
 
+            // Search Bar
             AppSearchBar(
                 query = searchQuery,
                 onQueryChange = { viewModel.customerSearchQuery.value = it },
-                placeholder = "بحث باسم العميل أو الهاتف...",
-                modifier = Modifier.padding(vertical = 6.dp),
-                testTag = "customers_search_bar"
+                placeholder = "ابحث باسم العميل أو رقم الهاتف...",
+                modifier = Modifier.fillMaxWidth()
             )
 
-            if (customers.isEmpty()) {
+            // Filter Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("الكل", "عليهم ديون", "خالصين").forEach { filter ->
+                    FilterChip(
+                        selected = filterType == filter,
+                        onClick = { filterType = filter },
+                        label = { Text(filter) }
+                    )
+                }
+            }
+
+            // Customers List
+            if (filteredCustomers.isEmpty()) {
                 EmptyStateView(
-                    title = "لا يوجد عملاء مسجلين",
-                    message = "أضف العملاء لمتابعة فواتيرهم وحساباتهم وسندات القبض",
+                    title = "لا يوجد عملاء",
+                    message = if (searchQuery.isBlank()) "اضغط على «إضافة عميل» لتسجيل العملاء ومتابعة ديونهم" else "لم يتم العثور على عملاء يطابقون البحث",
                     icon = Icons.Default.People,
                     modifier = Modifier.weight(1f)
                 )
             } else {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 90.dp)
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 84.dp)
                 ) {
-                    items(customers, key = { it.id }) { customer ->
+                    items(filteredCustomers, key = { it.id }) { customer ->
                         Card(
-                            onClick = { selectedCustomer = customer },
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { selectedCustomerForDetail = customer },
                             shape = RoundedCornerShape(14.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // Customer name, phone & status
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(customer.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                                        if (customer.phone.isNotBlank()) {
-                                            Text(customer.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(CustomerGreen.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Person, null, tint = CustomerGreen, modifier = Modifier.size(20.dp))
+                                        }
+                                        Column {
+                                            Text(customer.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            if (customer.phone.isNotBlank()) {
+                                                Text(customer.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
                                         }
                                     }
-                                    Text(
-                                        text = Formatters.formatMoney(customer.balance),
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (customer.balance > 0) MaterialTheme.colorScheme.error else Color(0xFF2E7D32),
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (customer.balance > 0) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                                    ) {
+                                        Text(
+                                            text = if (customer.balance > 0) "عليه: ${Formatters.formatMoney(customer.balance)}" else "خالص",
+                                            color = if (customer.balance > 0) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
 
-                                HorizontalDivider()
+                                HorizontalDivider(color = Color(0xFFF0F4F1))
 
+                                // Quick actions: Receipt, Edit, Delete
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -650,32 +791,30 @@ fun CustomersScreen(viewModel: GroceryViewModel, onNavigateBack: () -> Unit) {
                                 ) {
                                     OutlinedButton(
                                         onClick = { paymentCustomer = customer },
-                                        modifier = Modifier.height(34.dp),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.height(34.dp)
                                     ) {
-                                        Icon(Icons.Default.AddCard, null, Modifier.size(15.dp))
-                                        Spacer(Modifier.width(3.dp))
+                                        Icon(Icons.Default.Payment, null, Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
                                         Text("سند قبض", style = MaterialTheme.typography.labelMedium)
                                     }
 
-                                    Row {
-                                        TextButton(onClick = { selectedCustomer = customer }) {
-                                            Text("فتح الحساب والفواتير")
-                                        }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         IconButton(
                                             onClick = {
-                                                editing = customer
+                                                editingCustomer = customer
                                                 showAddEdit = true
                                             },
                                             modifier = Modifier.size(34.dp)
                                         ) {
-                                            Icon(Icons.Default.Edit, "تعديل")
+                                            Icon(Icons.Default.Edit, "تعديل", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         }
+
                                         IconButton(
                                             onClick = { deleteCustomer = customer },
                                             modifier = Modifier.size(34.dp)
                                         ) {
-                                            Icon(Icons.Default.Delete, "حذف الحساب", tint = MaterialTheme.colorScheme.error)
+                                            Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                                         }
                                     }
                                 }
