@@ -11,6 +11,7 @@ interface GroceryDao {
     @Query("SELECT * FROM products WHERE quantity <= minStock ORDER BY quantity ASC") fun getLowStockProducts(): Flow<List<Product>>
     @Query("SELECT * FROM products WHERE id = :id") suspend fun getProductById(id: Long): Product?
     @Query("SELECT * FROM products WHERE barcode = :barcode LIMIT 1") suspend fun getProductByBarcode(barcode: String): Product?
+    @Query("SELECT * FROM products WHERE lower(trim(name)) = lower(trim(:name)) LIMIT 1") suspend fun getProductByName(name: String): Product?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertProduct(product: Product): Long
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertProducts(products: List<Product>)
     @Update suspend fun updateProduct(product: Product)
@@ -98,9 +99,6 @@ interface GroceryDao {
     @Query("SELECT COALESCE(SUM(paidAmount), 0.0) FROM sale_invoices WHERE date = :date") fun getTodayCashSales(date: String): Flow<Double>
     @Query("SELECT COALESCE(SUM(grandTotal), 0.0) FROM purchase_invoices WHERE date = :date") fun getTodayPurchasesTotal(date: String): Flow<Double>
 
-    // ==========================================
-    // BACKUP & RESTORE DATA ACCESS
-    // ==========================================
     @Query("SELECT * FROM products ORDER BY id ASC") suspend fun getAllProductsList(): List<Product>
     @Query("SELECT * FROM customers ORDER BY id ASC") suspend fun getAllCustomersList(): List<Customer>
     @Query("SELECT * FROM suppliers ORDER BY id ASC") suspend fun getAllSuppliersList(): List<Supplier>
