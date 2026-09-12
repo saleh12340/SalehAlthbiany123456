@@ -6,12 +6,16 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.text.Layout
 import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -44,7 +48,8 @@ object ReceiptShareHelper {
 
     fun shareInvoiceToWhatsApp(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>) {
         val text = invoiceText(invoice, items)
-        shareToWhatsApp(context, createArabicImage(context, text, "invoice_${invoice.invoiceNumber}"), text, invoice.customerPhone)
+        val image = createArabicImage(context, text, "invoice_${invoice.invoiceNumber}")
+        shareToWhatsApp(context, image, text, invoice.customerPhone)
     }
 
     fun saveInvoiceImageToGallery(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>): Uri? {
@@ -54,7 +59,8 @@ object ReceiptShareHelper {
 
     fun sharePurchaseToWhatsApp(context: Context, invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>) {
         val text = purchaseText(invoice, items)
-        shareToWhatsApp(context, createArabicImage(context, text, "purchase_${invoice.invoiceNumber}"), text, "")
+        val image = createArabicImage(context, text, "purchase_${invoice.invoiceNumber}")
+        shareToWhatsApp(context, image, text, "")
     }
 
     fun savePurchaseImageToGallery(context: Context, invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>): Uri? {
@@ -77,7 +83,8 @@ object ReceiptShareHelper {
             appendLine("------------------------")
             appendLine("الرصيد الحالي: ${Formatters.formatMoney(customer.balance)}")
         }
-        shareToWhatsApp(context, createArabicImage(context, text, "statement_${customer.id}"), text, customer.phone)
+        val image = createArabicImage(context, text, "statement_${customer.id}")
+        shareToWhatsApp(context, image, text, customer.phone)
     }
 
     fun shareTransactionReceiptToWhatsApp(context: Context, customerName: String, customerPhone: String, title: String, amount: Double, currentBalance: Double) {
@@ -94,7 +101,8 @@ object ReceiptShareHelper {
             appendLine("------------------------")
             appendLine("شكراً لتعاملكم معنا")
         }
-        shareToWhatsApp(context, createArabicImage(context, text, "receipt_${System.currentTimeMillis()}"), text, customerPhone)
+        val image = createArabicImage(context, text, "receipt_${System.currentTimeMillis()}")
+        shareToWhatsApp(context, image, text, customerPhone)
     }
 
     private fun invoiceText(invoice: SaleInvoice, items: List<SaleInvoiceItem>): String = buildString {
@@ -139,29 +147,69 @@ object ReceiptShareHelper {
 
     private fun createArabicImage(context: Context, text: String, name: String): File? {
         return try {
-            val width = 900
-            val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
-                color = Color.BLACK
-                textSize = 34f
+            val width = 860
+            val padding = 36
+            val contentWidth = width - (padding * 2)
+
+            val bodyPaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(25, 25, 25)
+                textSize = 31f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             }
+
             val layout = StaticLayout.Builder
-                .obtain(text, 0, text.length, paint, width - 80)
+                .obtain(text, 0, text.length, bodyPaint, contentWidth)
                 .setAlignment(Layout.Alignment.ALIGN_OPPOSITE)
                 .setIncludePad(true)
-                .setLineSpacing(8f, 1f)
-                .setTextDirection(android.text.TextDirectionHeuristics.RTL)
+                .setLineSpacing(10f, 1.15f)
+                .setTextDirection(TextDirectionHeuristics.RTL)
                 .build()
-            val bitmap = Bitmap.createBitmap(width, layout.height + 120, Bitmap.Config.ARGB_8888)
+
+            val headerHeight = 120
+            val footerHeight = 36
+            val totalHeight = layout.height + headerHeight + footerHeight + (padding * 2)
+
+            val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
+
+            // White Background
             canvas.drawColor(Color.WHITE)
-            val titlePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
-                color = Color.rgb(14, 107, 56)
-                textSize = 42f
-                isFakeBoldText = true
+
+            // Outer Card Border
+            val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(215, 232, 220)
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
             }
-            canvas.drawText(STORE, width / 2f - titlePaint.measureText(STORE) / 2f, 55f, titlePaint)
+            val bgRect = RectF(10f, 10f, width - 10f, totalHeight - 10f)
+            canvas.drawRoundRect(bgRect, 22f, 22f, borderPaint)
+
+            // Top Header Green Banner
+            val bannerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(14, 107, 56)
+                style = Paint.Style.FILL
+            }
+            val bannerRect = RectF(10f, 10f, width - 10f, 105f)
+            canvas.drawRoundRect(bannerRect, 22f, 22f, bannerPaint)
+
+            val storeTitlePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 38f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText(STORE, width / 2f, 56f, storeTitlePaint)
+
+            val storeSubPaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(230, 248, 235)
+                textSize = 24f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("هاتف: $PHONE", width / 2f, 92f, storeSubPaint)
+
+            // Body text
             canvas.save()
-            canvas.translate(40f, 90f)
+            canvas.translate(padding.toFloat(), headerHeight.toFloat())
             layout.draw(canvas)
             canvas.restore()
 
@@ -204,8 +252,98 @@ object ReceiptShareHelper {
     fun shareToWhatsApp(context: Context, image: File?, text: String, phone: String) {
         val normalized = normalizePhoneNumber(phone)
 
+        if (image != null && image.exists()) {
+            val uri: Uri? = try {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", image)
+            } catch (_: Exception) {
+                null
+            }
+
+            if (uri != null) {
+                // 1. If customer phone number is provided, target direct chat with image + caption text
+                if (normalized.isNotBlank()) {
+                    try {
+                        val directIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_TEXT, text)
+                            putExtra("jid", "$normalized@s.whatsapp.net")
+                            setPackage("com.whatsapp")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(directIntent)
+                        return
+                    } catch (_: Exception) {
+                        try {
+                            val directW4bIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                putExtra(Intent.EXTRA_TEXT, text)
+                                putExtra("jid", "$normalized@s.whatsapp.net")
+                                setPackage("com.whatsapp.w4b")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(directW4bIntent)
+                            return
+                        } catch (_: Exception) {
+                            // Fallback to URL direct open with text if media jid intent is blocked on certain Android versions
+                            try {
+                                val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
+                                val urlIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    setPackage("com.whatsapp")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(urlIntent)
+                                return
+                            } catch (_: Exception) {
+                                // Fallback below
+                            }
+                        }
+                    }
+                }
+
+                // 2. Open WhatsApp share with both Image and Text caption
+                try {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_TEXT, text)
+                        setPackage("com.whatsapp")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(shareIntent)
+                    return
+                } catch (_: Exception) {
+                    try {
+                        val chooserIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_TEXT, text)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        val chooser = Intent.createChooser(chooserIntent, "مشاركة الإيصال عبر واتساب").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(chooser)
+                        return
+                    } catch (e: Exception) {
+                        shareTextOnlyToWhatsApp(context, text, normalized)
+                    }
+                }
+            } else {
+                shareTextOnlyToWhatsApp(context, text, normalized)
+            }
+        } else {
+            shareTextOnlyToWhatsApp(context, text, normalized)
+        }
+    }
+
+    private fun shareTextOnlyToWhatsApp(context: Context, text: String, normalized: String) {
         if (normalized.isNotBlank()) {
-            // Direct chat to WhatsApp customer page
             try {
                 val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -215,7 +353,6 @@ object ReceiptShareHelper {
                 context.startActivity(intent)
                 return
             } catch (_: Exception) {
-                // Try WhatsApp Business or browser if regular WhatsApp package isn't directly bound
                 try {
                     val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -225,43 +362,29 @@ object ReceiptShareHelper {
                     context.startActivity(intent)
                     return
                 } catch (_: Exception) {
-                    try {
-                        val url = "https://api.whatsapp.com/send?phone=$normalized&text=${Uri.encode(text)}"
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                        return
-                    } catch (_: Exception) {
-                        // Fallback below
-                    }
+                    // Chooser below
                 }
             }
         }
 
-        // Generic share chooser fallback if no customer phone
         try {
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = if (image != null) "image/png" else "text/plain"
+                type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, text)
-                if (image != null) {
-                    putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", image))
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
                 setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Exception) {
             try {
                 val fallback = Intent(Intent.ACTION_SEND).apply {
-                    type = if (image != null) "image/png" else "text/plain"
+                    type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
-                    if (image != null) {
-                        putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", image))
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(Intent.createChooser(fallback, "مشاركة العملية عبر واتساب"))
+                context.startActivity(Intent.createChooser(fallback, "مشاركة الفاتورة عبر واتساب").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
             } catch (e: Exception) {
                 Toast.makeText(context, "تعذر فتح واتساب: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }

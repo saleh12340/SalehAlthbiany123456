@@ -83,7 +83,11 @@ fun HomeScreen(
         InvoiceDetailDialog(
             invoice = inv,
             viewModel = viewModel,
-            onDismiss = { selectedInvoiceForDetail = null }
+            onDismiss = { selectedInvoiceForDetail = null },
+            onEditInvoice = { editId ->
+                selectedInvoiceForDetail = null
+                onNavigate("create_sale?editId=$editId")
+            }
         )
     }
 

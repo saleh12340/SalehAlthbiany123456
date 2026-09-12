@@ -59,7 +59,6 @@ fun SalesInvoicesScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    var showQuickCreateInvoice by remember { mutableStateOf(false) }
     var selectedInvoiceForDetail by remember { mutableStateOf<SaleInvoice?>(null) }
     var deletingInvoice by remember { mutableStateOf<SaleInvoice?>(null) }
     var filterType by remember { mutableStateOf("الكل") } // "الكل", "نقدي", "آجل"
@@ -82,7 +81,8 @@ fun SalesInvoicesScreen(
     // ==========================================
     // CREATE SALE INVOICE MODAL DIALOG (MATCHING PURCHASES DIALOG)
     // ==========================================
-    if (showQuickCreateInvoice) {
+    if (false) {
+        var showQuickCreateInvoice by remember { mutableStateOf(false) }
         var invoiceNumber by remember { mutableStateOf("") }
         LaunchedEffect(Unit) {
             invoiceNumber = viewModel.getNextSaleInvoiceNumber()
@@ -651,7 +651,7 @@ fun SalesInvoicesScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showQuickCreateInvoice = true }) {
+                    IconButton(onClick = { onNavigateToCreate(null) }) {
                         Icon(Icons.Default.Add, "فاتورة جديدة")
                     }
                 }
@@ -659,7 +659,7 @@ fun SalesInvoicesScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showQuickCreateInvoice = true },
+                onClick = { onNavigateToCreate(null) },
                 containerColor = SaleGreen,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
