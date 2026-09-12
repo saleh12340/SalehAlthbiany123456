@@ -69,6 +69,8 @@ interface GroceryDao {
     @Query("SELECT * FROM purchase_invoice_items WHERE invoiceId = :invoiceId") suspend fun getItemsForPurchaseInvoiceList(invoiceId: Long): List<PurchaseInvoiceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPurchaseInvoiceItems(items: List<PurchaseInvoiceItem>)
     @Query("DELETE FROM purchase_invoice_items WHERE invoiceId = :invoiceId") suspend fun deletePurchaseInvoiceItems(invoiceId: Long)
+    @Query("SELECT s.* FROM sale_invoices s INNER JOIN sale_invoice_items i ON s.id = i.invoiceId WHERE i.productId = :productId OR i.productName = :productName GROUP BY s.id ORDER BY s.timestamp DESC") fun getSaleInvoicesForProduct(productId: Long, productName: String): Flow<List<SaleInvoice>>
+    @Query("SELECT p.* FROM purchase_invoices p INNER JOIN purchase_invoice_items i ON p.id = i.invoiceId WHERE i.productId = :productId OR i.productName = :productName GROUP BY p.id ORDER BY p.timestamp DESC") fun getPurchaseInvoicesForProduct(productId: Long, productName: String): Flow<List<PurchaseInvoice>>
 
     @Query("SELECT * FROM customer_transactions WHERE customerId = :customerId ORDER BY timestamp DESC") fun getTransactionsForCustomer(customerId: Long): Flow<List<CustomerTransaction>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertCustomerTransaction(transaction: CustomerTransaction): Long

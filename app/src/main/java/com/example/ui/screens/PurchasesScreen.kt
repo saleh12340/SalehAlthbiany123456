@@ -46,6 +46,7 @@ private val PurchaseAccent = Color(0xFF8E24AA)
 @Composable
 fun PurchasesScreen(
     viewModel: GroceryViewModel,
+    editingInvoiceId: Long? = null,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -59,12 +60,23 @@ fun PurchasesScreen(
     var supplierQuery by remember { mutableStateOf("") }
 
     var showCreateInvoice by remember { mutableStateOf(false) }
+    var editingPurchaseInvoice by remember { mutableStateOf<PurchaseInvoice?>(null) }
     var selectedPurchaseForDetail by remember { mutableStateOf<PurchaseInvoice?>(null) }
     var selectedSupplierForDetail by remember { mutableStateOf<Supplier?>(null) }
     var showAddSupplierDialog by remember { mutableStateOf(false) }
     var editingSupplier by remember { mutableStateOf<Supplier?>(null) }
     var paymentSupplier by remember { mutableStateOf<Supplier?>(null) }
     var deleteSupplierTarget by remember { mutableStateOf<Supplier?>(null) }
+
+    LaunchedEffect(editingInvoiceId) {
+        if (editingInvoiceId != null && editingInvoiceId > 0) {
+            val inv = viewModel.getPurchaseInvoiceById(editingInvoiceId)
+            if (inv != null) {
+                editingPurchaseInvoice = inv
+                showCreateInvoice = true
+            }
+        }
+    }
 
     val filteredInvoices = remember(invoices, invoiceQuery) {
         if (invoiceQuery.isBlank()) invoices
@@ -88,12 +100,16 @@ fun PurchasesScreen(
     // 1. CREATE PURCHASE INVOICE DIALOG
     // ==========================================
     if (showCreateInvoice) {
-        var invoiceNumber by remember { mutableStateOf("") }
-        LaunchedEffect(Unit) {
-            invoiceNumber = viewModel.getNextPurchaseInvoiceNumber()
+        var invoiceNumber by remember { mutableStateOf(editingPurchaseInvoice?.invoiceNumber ?: "") }
+        LaunchedEffect(editingPurchaseInvoice) {
+            if (editingPurchaseInvoice == null) {
+                invoiceNumber = viewModel.getNextPurchaseInvoiceNumber()
+            } else {
+                invoiceNumber = editingPurchaseInvoice!!.invoiceNumber
+            }
         }
 
-        var supplierName by remember { mutableStateOf("") }
+        var supplierName by remember { mutableStateOf(editingPurchaseInvoice?.supplierName ?: "") }
         var selectedSupplier by remember { mutableStateOf<Supplier?>(null) }
         var showSupplierPicker by remember { mutableStateOf(false) }
 
@@ -102,8 +118,21 @@ fun PurchasesScreen(
         var totalText by remember { mutableStateOf("") }
         var selectedProduct by remember { mutableStateOf<Product?>(null) }
         var purchaseItems by remember { mutableStateOf(listOf<PurchaseInvoiceItem>()) }
-        var paidText by remember { mutableStateOf("") }
-        var notes by remember { mutableStateOf("") }
+        var paidText by remember { mutableStateOf(if (editingPurchaseInvoice != null) Formatters.englishDigits(editingPurchaseInvoice!!.paidAmount.toString()) else "") }
+        var notes by remember { mutableStateOf(editingPurchaseInvoice?.notes ?: "") }
+
+        LaunchedEffect(editingPurchaseInvoice) {
+            if (editingPurchaseInvoice != null) {
+                supplierName = editingPurchaseInvoice!!.supplierName
+                paidText = Formatters.englishDigits(editingPurchaseInvoice!!.paidAmount.toString())
+                notes = editingPurchaseInvoice!!.notes
+                val existingItems = viewModel.getPurchaseInvoiceItemsList(editingPurchaseInvoice!!.id)
+                purchaseItems = existingItems
+                if (editingPurchaseInvoice!!.supplierId != null) {
+                    selectedSupplier = suppliers.firstOrNull { it.id == editingPurchaseInvoice!!.supplierId }
+                }
+            }
+        }
 
         val qty = qtyText.toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0
         val total = totalText.toDoubleOrNull() ?: 0.0
@@ -231,14 +260,17 @@ fun PurchasesScreen(
         }
 
         AlertDialog(
-            onDismissRequest = { showCreateInvoice = false },
+            onDismissRequest = {
+                showCreateInvoice = false
+                editingPurchaseInvoice = null
+            },
             title = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("فاتورة مشتريات جديدة", fontWeight = FontWeight.Bold)
+                    Text(if (editingPurchaseInvoice != null) "تعديل فاتورة مشتريات" else "فاتورة مشتريات جديدة", fontWeight = FontWeight.Bold)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = PurchaseGreen.copy(alpha = 0.12f)
@@ -526,10 +558,13 @@ fun PurchasesScreen(
 
                         // Ensure supplier exists or create
                         fun proceedWithSaving(finalSupplier: Supplier) {
+                            val isEdit = editingPurchaseInvoice != null
                             val invoice = PurchaseInvoice(
+                                id = editingPurchaseInvoice?.id ?: 0L,
                                 invoiceNumber = invoiceNumber,
-                                date = Formatters.getTodayDate(),
-                                time = Formatters.getCurrentTime(),
+                                date = editingPurchaseInvoice?.date ?: Formatters.getTodayDate(),
+                                time = editingPurchaseInvoice?.time ?: Formatters.getCurrentTime(),
+                                timestamp = editingPurchaseInvoice?.timestamp ?: System.currentTimeMillis(),
                                 supplierId = finalSupplier.id,
                                 supplierName = finalSupplier.name,
                                 subtotal = grandTotal,
@@ -543,10 +578,20 @@ fun PurchasesScreen(
                             // Link products to inventory and update stock
                             fun saveMissingProducts(index: Int, resolvedItems: List<PurchaseInvoiceItem>) {
                                 if (index >= purchaseItems.size) {
-                                    viewModel.createPurchaseInvoice(invoice, resolvedItems) { createdId ->
-                                        showCreateInvoice = false
-                                        selectedPurchaseForDetail = invoice.copy(id = createdId)
-                                        Toast.makeText(context, "تم حفظ فاتورة المشتريات وزيادة المخزون بنجاح", Toast.LENGTH_LONG).show()
+                                    if (isEdit) {
+                                        viewModel.updatePurchaseInvoice(invoice, resolvedItems) {
+                                            showCreateInvoice = false
+                                            editingPurchaseInvoice = null
+                                            selectedPurchaseForDetail = invoice
+                                            Toast.makeText(context, "تم حفظ تعديلات فاتورة المشتريات وتحديث المخزون بنجاح", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        viewModel.createPurchaseInvoice(invoice, resolvedItems) { createdId ->
+                                            showCreateInvoice = false
+                                            editingPurchaseInvoice = null
+                                            selectedPurchaseForDetail = invoice.copy(id = createdId)
+                                            Toast.makeText(context, "تم حفظ فاتورة المشتريات وزيادة المخزون بنجاح", Toast.LENGTH_LONG).show()
+                                        }
                                     }
                                     return
                                 }
@@ -591,11 +636,14 @@ fun PurchasesScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = PurchaseGreen),
                     modifier = Modifier.testTag("save_purchase_btn")
                 ) {
-                    Text("حفظ الفاتورة وتحديث المخزون", fontWeight = FontWeight.Bold)
+                    Text(if (editingPurchaseInvoice != null) "حفظ التعديلات وتحديث المخزون" else "حفظ الفاتورة وتحديث المخزون", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateInvoice = false }) {
+                TextButton(onClick = {
+                    showCreateInvoice = false
+                    editingPurchaseInvoice = null
+                }) {
                     Text("إلغاء")
                 }
             }
@@ -897,10 +945,29 @@ fun PurchasesScreen(
                                                 Text("فاتورة #${inv.invoiceNumber}", fontWeight = FontWeight.Bold)
                                                 Text("${inv.date} ${inv.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            Column(horizontalAlignment = Alignment.End) {
-                                                Text(Formatters.formatMoney(inv.grandTotal), fontWeight = FontWeight.Bold, color = PurchaseGreen)
-                                                if (inv.remainingAmount > 0) {
-                                                    Text("متبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text(Formatters.formatMoney(inv.grandTotal), fontWeight = FontWeight.Bold, color = PurchaseGreen)
+                                                    if (inv.remainingAmount > 0) {
+                                                        Text("متبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                                IconButton(
+                                                    onClick = {
+                                                        editingPurchaseInvoice = inv
+                                                        showCreateInvoice = true
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "تعديل الفاتورة",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
                                                 }
                                             }
                                         }
@@ -967,7 +1034,12 @@ fun PurchasesScreen(
             invoice = invoice,
             viewModel = viewModel,
             onDismiss = { selectedPurchaseForDetail = null },
-            onDeleted = { selectedPurchaseForDetail = null }
+            onDeleted = { selectedPurchaseForDetail = null },
+            onEditInvoice = { inv ->
+                selectedPurchaseForDetail = null
+                editingPurchaseInvoice = inv
+                showCreateInvoice = true
+            }
         )
     }
 
@@ -1210,11 +1282,30 @@ fun PurchasesScreen(
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                         }
-                                        TextButton(
-                                            onClick = { selectedPurchaseForDetail = invoice },
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text("عرض التفاصيل والطباعة")
+                                            IconButton(
+                                                onClick = {
+                                                    editingPurchaseInvoice = invoice
+                                                    showCreateInvoice = true
+                                                },
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Edit,
+                                                    contentDescription = "تعديل الفاتورة",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            TextButton(
+                                                onClick = { selectedPurchaseForDetail = invoice },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("عرض التفاصيل والطباعة")
+                                            }
                                         }
                                     }
                                 }

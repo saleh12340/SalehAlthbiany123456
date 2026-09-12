@@ -231,6 +231,52 @@ class GroceryRepository(private val dao: GroceryDao) {
         dao.deletePurchaseInvoice(invoice)
     }
 
+    suspend fun updatePurchaseInvoice(invoice: PurchaseInvoice, newItems: List<PurchaseInvoiceItem>) {
+        val oldInvoice = dao.getPurchaseInvoiceById(invoice.id) ?: return
+        val oldItems = dao.getItemsForPurchaseInvoiceList(invoice.id)
+        for (item in oldItems) {
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, -item.quantity) }
+        }
+        oldInvoice.supplierId?.let { suppId ->
+            dao.updateSupplierFinancials(suppId, -oldInvoice.remainingAmount, -oldInvoice.grandTotal, -oldInvoice.paidAmount)
+            dao.getTransactionsForSupplierList(suppId).filter { it.invoiceId == invoice.id }.forEach { dao.deleteSupplierTransaction(it) }
+        }
+        dao.deletePurchaseInvoiceItems(invoice.id)
+
+        val processedItems = newItems.map { item ->
+            val prodId = if (item.productId != null && item.productId > 0) {
+                item.productId
+            } else {
+                ensureProductExists(item.productName, 0.0, item.unitPrice, item.unit)
+            }
+            item.copy(productId = prodId, invoiceId = invoice.id)
+        }
+        dao.insertPurchaseInvoice(invoice)
+        dao.insertPurchaseInvoiceItems(processedItems)
+        for (item in processedItems) {
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, item.quantity) }
+        }
+        invoice.supplierId?.let { suppId ->
+            dao.updateSupplierFinancials(suppId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)
+            dao.insertSupplierTransaction(
+                SupplierTransaction(
+                    supplierId = suppId,
+                    date = invoice.date,
+                    time = invoice.time,
+                    type = "فاتورة مشتريات (معدلة)",
+                    description = "فاتورة مشتريات #${invoice.invoiceNumber}",
+                    amount = invoice.grandTotal,
+                    paid = invoice.paidAmount,
+                    remaining = invoice.remainingAmount,
+                    invoiceId = invoice.id
+                )
+            )
+        }
+    }
+
+    fun getSaleInvoicesForProduct(productId: Long, productName: String): Flow<List<SaleInvoice>> = dao.getSaleInvoicesForProduct(productId, productName)
+    fun getPurchaseInvoicesForProduct(productId: Long, productName: String): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesForProduct(productId, productName)
+
     fun getItemsForPurchaseInvoice(invoiceId: Long): Flow<List<PurchaseInvoiceItem>> = dao.getItemsForPurchaseInvoice(invoiceId)
     suspend fun getItemsForPurchaseInvoiceList(invoiceId: Long): List<PurchaseInvoiceItem> = dao.getItemsForPurchaseInvoiceList(invoiceId)
 

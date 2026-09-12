@@ -117,20 +117,40 @@ class MainActivity : ComponentActivity() {
                             composable("products") {
                                 ProductsScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToEditSaleInvoice = { editId ->
+                                        navController.navigate("create_sale?editId=$editId")
+                                    },
+                                    onNavigateToEditPurchaseInvoice = { editId ->
+                                        navController.navigate("purchases?editId=$editId")
+                                    }
                                 )
                             }
 
                             composable("customers") {
                                 CustomersScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToEditInvoice = { editId ->
+                                        navController.navigate("create_sale?editId=$editId")
+                                    }
                                 )
                             }
 
-                            composable("purchases") {
+                            composable(
+                                route = "purchases?editId={editId}",
+                                arguments = listOf(
+                                    navArgument("editId") {
+                                        type = NavType.StringType
+                                        nullable = true
+                                        defaultValue = null
+                                    }
+                                )
+                            ) { backStackEntry ->
+                                val editId = backStackEntry.arguments?.getString("editId")?.toLongOrNull()
                                 PurchasesScreen(
                                     viewModel = viewModel,
+                                    editingInvoiceId = editId,
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }
@@ -138,7 +158,10 @@ class MainActivity : ComponentActivity() {
                             composable("suppliers") {
                                 SuppliersScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToEditPurchaseInvoice = { editId ->
+                                        navController.navigate("purchases?editId=$editId")
+                                    }
                                 )
                             }
 

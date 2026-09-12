@@ -162,10 +162,15 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     suspend fun getNextSaleInvoiceNumber(): String = Formatters.generateInvoiceNumber("INV", repository.getSaleInvoiceCount())
 
     fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createPurchaseInvoice(invoice, items)) } }
+    fun updatePurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.updatePurchaseInvoice(invoice, items); onComplete() } }
     fun deletePurchaseInvoice(invoice: PurchaseInvoice, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.deletePurchaseInvoice(invoice); onComplete() } }
+    suspend fun getPurchaseInvoiceById(id: Long): PurchaseInvoice? = repository.getPurchaseInvoiceById(id)
+    fun getSaleInvoicesForProduct(productId: Long, productName: String): Flow<List<SaleInvoice>> = repository.getSaleInvoicesForProduct(productId, productName)
+    fun getPurchaseInvoicesForProduct(productId: Long, productName: String): Flow<List<PurchaseInvoice>> = repository.getPurchaseInvoicesForProduct(productId, productName)
     fun printPurchaseInvoiceThermal(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onResult: (Boolean, String) -> Unit) { viewModelScope.launch { val paperW = if (printerManager.paperSize.value == "80mm") 576 else 384; val bitmap = PurchaseReceiptFormatter.generate(invoice, items, paperW); val success = printerManager.printBitmap(bitmap); onResult(success, if (success) "تمت طباعة فاتورة المورد بنجاح" else "تعذر إرسال أمر الطباعة. تأكد من اتصال الطابعة") } }
     suspend fun getNextPurchaseInvoiceNumber(): String = Formatters.generateInvoiceNumber("PUR", repository.getPurchaseInvoiceCount())
     fun getPurchaseInvoiceItems(invoiceId: Long): Flow<List<PurchaseInvoiceItem>> = repository.getItemsForPurchaseInvoice(invoiceId)
+    suspend fun getPurchaseInvoiceItemsList(invoiceId: Long): List<PurchaseInvoiceItem> = repository.getItemsForPurchaseInvoiceList(invoiceId)
 
     fun saveExpense(expense: Expense, onComplete: () -> Unit = {}) { viewModelScope.launch { if (expense.id == 0L) repository.insertExpense(expense) else repository.updateExpense(expense); onComplete() } }
     fun deleteExpense(expense: Expense) { viewModelScope.launch { repository.deleteExpense(expense) } }

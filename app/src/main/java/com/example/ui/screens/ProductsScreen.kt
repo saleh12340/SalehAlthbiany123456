@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.entities.Product
+import com.example.data.local.entities.PurchaseInvoice
+import com.example.data.local.entities.SaleInvoice
 import com.example.ui.components.AppSearchBar
 import com.example.ui.components.EmptyStateView
 import com.example.ui.theme.GroceryGreenPrimary
@@ -39,7 +41,9 @@ private val ProductGreen = Color(0xFF0E6B38)
 @Composable
 fun ProductsScreen(
     viewModel: GroceryViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEditSaleInvoice: ((Long) -> Unit)? = null,
+    onNavigateToEditPurchaseInvoice: ((Long) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val products by viewModel.products.collectAsState()
@@ -53,6 +57,7 @@ fun ProductsScreen(
     var editingProduct by remember { mutableStateOf<Product?>(null) }
     var deletingProduct by remember { mutableStateOf<Product?>(null) }
     var adjustStockProduct by remember { mutableStateOf<Product?>(null) }
+    var viewingInvoicesProduct by remember { mutableStateOf<Product?>(null) }
     var filterCategory by remember { mutableStateOf("الكل") }
 
     val totalInventoryValue = remember(products) {
@@ -211,7 +216,7 @@ fun ProductsScreen(
                             ) {
                                 UnifiedOutlinedTextField(
                                     value = priceText,
-                                    onValueChange = { priceText = it },
+                                    onValueChange = { priceText = Formatters.englishDigits(it) },
                                     label = { Text("سعر البيع *") },
                                     placeholder = { Text("0.00") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -222,7 +227,7 @@ fun ProductsScreen(
                                 )
                                 UnifiedOutlinedTextField(
                                     value = costPriceText,
-                                    onValueChange = { costPriceText = it },
+                                    onValueChange = { costPriceText = Formatters.englishDigits(it) },
                                     label = { Text("سعر التكلفة (الشراء)") },
                                     placeholder = { Text("0.00") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -237,7 +242,7 @@ fun ProductsScreen(
                             ) {
                                 UnifiedOutlinedTextField(
                                     value = quantityText,
-                                    onValueChange = { quantityText = it },
+                                    onValueChange = { quantityText = Formatters.englishDigits(it) },
                                     label = { Text("الكمية المتوفرة *") },
                                     placeholder = { Text("10") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -248,7 +253,7 @@ fun ProductsScreen(
                                 )
                                 UnifiedOutlinedTextField(
                                     value = minStockText,
-                                    onValueChange = { minStockText = it },
+                                    onValueChange = { minStockText = Formatters.englishDigits(it) },
                                     label = { Text("حد التنبيه الأدنى") },
                                     placeholder = { Text("5") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -336,7 +341,7 @@ fun ProductsScreen(
                     Text("الصنف: ${product.name}")
                     UnifiedOutlinedTextField(
                         value = adjustmentQty,
-                        onValueChange = { adjustmentQty = it },
+                        onValueChange = { adjustmentQty = Formatters.englishDigits(it) },
                         label = { Text("الكمية الفعلية الجديدة") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
@@ -392,6 +397,198 @@ fun ProductsScreen(
                 }
             }
         )
+    }
+
+    // Dialog to view and edit invoices related to this product (Sales & Purchases)
+    viewingInvoicesProduct?.let { product ->
+        val saleInvoices by viewModel.getSaleInvoicesForProduct(product.id, product.name).collectAsState(initial = emptyList())
+        val purchaseInvoices by viewModel.getPurchaseInvoicesForProduct(product.id, product.name).collectAsState(initial = emptyList())
+        var activeTab by remember { mutableIntStateOf(0) }
+
+        Dialog(
+            onDismissRequest = { viewingInvoicesProduct = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.85f),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("حركات وفواتير الصنف", style = MaterialTheme.typography.labelMedium, color = ProductGreen)
+                            Text(product.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                        }
+                        IconButton(onClick = { viewingInvoicesProduct = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "إغلاق")
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("الرصيد بالمخزن: ${Formatters.formatNumber(product.quantity)} ${product.unit}", fontWeight = FontWeight.Bold)
+                            Text("سعر البيع: ${Formatters.formatMoney(product.price)}", fontWeight = FontWeight.Bold, color = ProductGreen)
+                        }
+                    }
+
+                    TabRow(selectedTabIndex = activeTab) {
+                        Tab(
+                            selected = activeTab == 0,
+                            onClick = { activeTab = 0 },
+                            text = { Text("فواتير المبيعات (${saleInvoices.size})", fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = activeTab == 1,
+                            onClick = { activeTab = 1 },
+                            text = { Text("فواتير المشتريات (${purchaseInvoices.size})", fontWeight = FontWeight.Bold) }
+                        )
+                    }
+
+                    if (activeTab == 0) {
+                        if (saleInvoices.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("لا توجد فواتير مبيعات مسجلة لهذا الصنف", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(saleInvoices, key = { it.id }) { inv ->
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                                        border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text("فاتورة مبيعات #${inv.invoiceNumber}", fontWeight = FontWeight.Bold, color = ProductGreen)
+                                                Text("${inv.customerName} • ${inv.date}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("الإجمالي: ${Formatters.formatMoney(inv.grandTotal)}", fontWeight = FontWeight.SemiBold)
+                                            }
+                                            if (onNavigateToEditSaleInvoice != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        viewingInvoicesProduct = null
+                                                        onNavigateToEditSaleInvoice(inv.id)
+                                                    },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "تعديل فاتورة المبيعات",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        if (purchaseInvoices.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("لا توجد فواتير مشتريات مسجلة لهذا الصنف", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(purchaseInvoices, key = { it.id }) { inv ->
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                                        border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text("فاتورة مشتريات #${inv.invoiceNumber}", fontWeight = FontWeight.Bold, color = Color(0xFF8E24AA))
+                                                Text("${inv.supplierName} • ${inv.date}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("الإجمالي: ${Formatters.formatMoney(inv.grandTotal)}", fontWeight = FontWeight.SemiBold)
+                                            }
+                                            if (onNavigateToEditPurchaseInvoice != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        viewingInvoicesProduct = null
+                                                        onNavigateToEditPurchaseInvoice(inv.id)
+                                                    },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "تعديل فاتورة المشتريات",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { viewingInvoicesProduct = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProductGreen)
+                    ) {
+                        Text("إغلاق")
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -544,6 +741,7 @@ fun ProductsScreen(
                         val isLowStock = product.quantity <= product.minStock
 
                         Card(
+                            onClick = { viewingInvoicesProduct = product },
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
@@ -626,6 +824,13 @@ fun ProductsScreen(
 
                                     // Action buttons
                                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        IconButton(
+                                            onClick = { viewingInvoicesProduct = product },
+                                            modifier = Modifier.size(34.dp)
+                                        ) {
+                                            Icon(Icons.Default.ReceiptLong, "فواتير الصنف", tint = ProductGreen, modifier = Modifier.size(18.dp))
+                                        }
+
                                         IconButton(
                                             onClick = { adjustStockProduct = product },
                                             modifier = Modifier.size(34.dp)

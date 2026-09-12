@@ -426,51 +426,23 @@ fun CreateInvoiceScreen(
                         style = MaterialTheme.typography.titleSmall
                     )
 
-                    UnifiedOutlinedTextField(
-                        value = itemName,
-                        onValueChange = { query ->
-                            itemName = query
-                            selectedProduct = products.find { it.name.equals(query.trim(), ignoreCase = true) }
-                            selectedProduct?.let {
-                                val currentQ = Formatters.englishDigits(qtyText).toDoubleOrNull() ?: 1.0
-                                totalText = Formatters.englishDigits((it.price * currentQ).toString())
-                            }
-                        },
-                        label = { Text("اسم الصنف أو السلعة *") },
-                        placeholder = { Text("اكتب اسم الصنف...") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("item_name_input")
-                    )
-
-                    // Product quick suggestions
-                    val matchingProducts = remember(itemName, products) {
-                        if (itemName.isBlank()) emptyList() else products.filter { it.name.contains(itemName, true) }.take(4)
-                    }
-                    if (matchingProducts.isNotEmpty() && selectedProduct == null) {
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(matchingProducts) { prod ->
-                                SuggestionChip(
-                                    onClick = {
-                                        selectedProduct = prod
-                                        itemName = prod.name
-                                        val currentQ = Formatters.englishDigits(qtyText).toDoubleOrNull() ?: 1.0
-                                        totalText = Formatters.englishDigits((prod.price * currentQ).toString())
-                                    },
-                                    label = { Text("${prod.name} (${Formatters.formatMoney(prod.price)})") }
-                                )
-                            }
-                        }
-                    }
-
+                    // 1. Total Price, Quantity, Item Name Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        UnifiedOutlinedTextField(
+                            value = totalText,
+                            onValueChange = { totalText = Formatters.englishDigits(it) },
+                            label = { Text("الإجمالي") },
+                            placeholder = { Text("0") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .testTag("item_total_input")
+                        )
                         UnifiedOutlinedTextField(
                             value = qtyText,
                             onValueChange = {
@@ -480,39 +452,83 @@ fun CreateInvoiceScreen(
                                     totalText = Formatters.englishDigits((p.price * q).toString())
                                 }
                             },
-                            label = { Text("الكمية / العدد") },
+                            label = { Text("العدد") },
                             placeholder = { Text("1") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(0.8f)
                                 .testTag("item_qty_input")
                         )
-
                         UnifiedOutlinedTextField(
-                            value = totalText,
-                            onValueChange = { totalText = Formatters.englishDigits(it) },
-                            label = { Text("الإجمالي (ر.ي) *") },
-                            placeholder = { Text("0.00") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            value = itemName,
+                            onValueChange = { query ->
+                                itemName = query
+                                selectedProduct = products.firstOrNull { it.name.equals(query.trim(), true) }
+                                selectedProduct?.let { p ->
+                                    val currentQ = Formatters.englishDigits(qtyText).toDoubleOrNull() ?: 1.0
+                                    totalText = Formatters.englishDigits((p.price * currentQ).toString())
+                                }
+                            },
+                            label = { Text("اسم الصنف") },
+                            placeholder = { Text("تفاصيل الصنف") },
                             singleLine = true,
                             modifier = Modifier
-                                .weight(1.2f)
-                                .testTag("item_total_input")
+                                .weight(1.7f)
+                                .testTag("item_name_input")
                         )
+                    }
 
+                    // Product quick suggestions
+                    if (itemName.isNotBlank() && selectedProduct == null) {
+                        val productMatches = products.filter {
+                            it.name.contains(itemName, true)
+                        }.take(3)
+                        if (productMatches.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                productMatches.forEach { prod ->
+                                    SuggestionChip(
+                                        onClick = {
+                                            selectedProduct = prod
+                                            itemName = prod.name
+                                            val currentQ = Formatters.englishDigits(qtyText).toDoubleOrNull() ?: 1.0
+                                            totalText = Formatters.englishDigits((prod.price * currentQ).toString())
+                                        },
+                                        label = { Text(prod.name, maxLines = 1, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Computed unit price & add button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val calculatedUnitP = run {
+                            val tot = Formatters.englishDigits(totalText).toDoubleOrNull() ?: 0.0
+                            val q = Formatters.englishDigits(qtyText).toDoubleOrNull() ?: 1.0
+                            if (q > 0) tot / q else 0.0
+                        }
+                        Text(
+                            text = "سعر الوحدة: ${Formatters.formatMoney(calculatedUnitP)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Button(
                             onClick = { addSaleItem() },
                             colors = ButtonDefaults.buttonColors(containerColor = InvoiceGreen),
                             shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .align(Alignment.CenterVertically)
-                                .height(54.dp)
-                                .testTag("add_item_button")
+                            modifier = Modifier.testTag("add_item_button")
                         ) {
-                            Icon(Icons.Default.AddShoppingCart, null)
+                            Icon(Icons.Default.Add, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("إضافة")
+                            Text("إضافة الصنف", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

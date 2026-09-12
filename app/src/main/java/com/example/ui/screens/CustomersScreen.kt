@@ -46,7 +46,8 @@ private val CustomerGreen = Color(0xFF0E6B38)
 @Composable
 fun CustomersScreen(
     viewModel: GroceryViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEditInvoice: ((Long) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val customers by viewModel.customers.collectAsState()
@@ -81,7 +82,12 @@ fun CustomersScreen(
         InvoiceDetailDialog(
             invoice = invoice,
             viewModel = viewModel,
-            onDismiss = { selectedInvoiceForDetail = null }
+            onDismiss = { selectedInvoiceForDetail = null },
+            onEditInvoice = { invId ->
+                selectedInvoiceForDetail = null
+                selectedCustomerForDetail = null
+                onNavigateToEditInvoice?.invoke(invId)
+            }
         )
     }
 
@@ -172,7 +178,7 @@ fun CustomersScreen(
 
                             UnifiedOutlinedTextField(
                                 value = phone,
-                                onValueChange = { phone = it },
+                                onValueChange = { phone = Formatters.englishDigits(it) },
                                 label = { Text("رقم الهاتف") },
                                 placeholder = { Text("77xxxxxxx") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -192,7 +198,7 @@ fun CustomersScreen(
                             if (editingCustomer == null) {
                                 UnifiedOutlinedTextField(
                                     value = balance,
-                                    onValueChange = { balance = it },
+                                    onValueChange = { balance = Formatters.englishDigits(it) },
                                     label = { Text("الرصيد السابق (دين العميل الافتتاحي)") },
                                     placeholder = { Text("0.00") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -563,10 +569,31 @@ fun CustomersScreen(
                                                 Text("فاتورة #${inv.invoiceNumber}", fontWeight = FontWeight.Bold, color = CustomerGreen)
                                                 Text("${inv.date} • ${inv.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            Column(horizontalAlignment = Alignment.End) {
-                                                Text("الإجمالي: ${Formatters.formatMoney(inv.grandTotal)}", fontWeight = FontWeight.Bold)
-                                                if (inv.remainingAmount > 0) {
-                                                    Text("المتبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text("الإجمالي: ${Formatters.formatMoney(inv.grandTotal)}", fontWeight = FontWeight.Bold)
+                                                    if (inv.remainingAmount > 0) {
+                                                        Text("المتبقي: ${Formatters.formatMoney(inv.remainingAmount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                                if (onNavigateToEditInvoice != null) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            selectedCustomerForDetail = null
+                                                            onNavigateToEditInvoice(inv.id)
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Default.Edit,
+                                                            contentDescription = "تعديل الفاتورة",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }

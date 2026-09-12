@@ -33,7 +33,8 @@ import com.example.util.Formatters
 @Composable
 fun SuppliersScreen(
     viewModel: GroceryViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEditPurchaseInvoice: ((Long) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val suppliers by viewModel.suppliers.collectAsState()
@@ -83,7 +84,7 @@ fun SuppliersScreen(
                     if (editingSupplier == null) {
                         UnifiedOutlinedTextField(
                             value = initialBalance,
-                            onValueChange = { initialBalance = it },
+                            onValueChange = { initialBalance = Formatters.englishDigits(it) },
                             label = { Text("الرصيد السابق للمورد (مستحقات سابقة)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
@@ -145,7 +146,7 @@ fun SuppliersScreen(
 
                     UnifiedOutlinedTextField(
                         value = paymentAmountText,
-                        onValueChange = { paymentAmountText = it },
+                        onValueChange = { paymentAmountText = Formatters.englishDigits(it) },
                         label = { Text("المبلغ المدفوع للمورد (ر.ي) *") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -267,13 +268,32 @@ fun SuppliersScreen(
                                         }
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            if (tx.amount > 0) {
-                                                Text("فاتورة مشتريات: +${Formatters.formatMoney(tx.amount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                            Column {
+                                                if (tx.amount > 0) {
+                                                    Text("فاتورة مشتريات: +${Formatters.formatMoney(tx.amount)}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                                }
+                                                if (tx.paid > 0) {
+                                                    Text("سند صرف: -${Formatters.formatMoney(tx.paid)}", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
+                                                }
                                             }
-                                            if (tx.paid > 0) {
-                                                Text("سند صرف: -${Formatters.formatMoney(tx.paid)}", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
+                                            if (tx.invoiceId != null && onNavigateToEditPurchaseInvoice != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        selectedSupplierForStatement = null
+                                                        onNavigateToEditPurchaseInvoice(tx.invoiceId)
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "تعديل فاتورة الشراء",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
