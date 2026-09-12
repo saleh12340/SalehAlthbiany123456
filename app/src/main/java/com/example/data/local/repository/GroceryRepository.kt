@@ -5,6 +5,8 @@ import com.example.data.local.entities.*
 import kotlinx.coroutines.flow.Flow
 
 class GroceryRepository(private val dao: GroceryDao) {
+    fun getDao(): GroceryDao = dao
+
     val allProducts: Flow<List<Product>> = dao.getAllProducts()
     val lowStockProducts: Flow<List<Product>> = dao.getLowStockProducts()
     fun searchProducts(query: String): Flow<List<Product>> = dao.searchProducts(query)
@@ -14,6 +16,30 @@ class GroceryRepository(private val dao: GroceryDao) {
     suspend fun updateProduct(product: Product) = dao.updateProduct(product)
     suspend fun updateProductStock(id: Long, delta: Double) = dao.updateProductStock(id, delta)
     suspend fun deleteProduct(product: Product) = dao.deleteProduct(product)
+
+    /**
+     * Ensures an item exists in the products catalog.
+     * If not found by trimmed name (case-insensitive), creates a new product and returns its ID.
+     * Guarantees no duplicates are inserted.
+     */
+    suspend fun ensureProductExists(name: String, price: Double, costPrice: Double = 0.0, unit: String = "حبة"): Long {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return 0L
+        val all = dao.getAllProductsList()
+        val existing = all.find { it.name.trim().equals(trimmed, ignoreCase = true) }
+        if (existing != null) {
+            return existing.id
+        }
+        val newProduct = Product(
+            name = trimmed,
+            price = if (price > 0) price else costPrice,
+            costPrice = costPrice,
+            quantity = 0.0,
+            unit = unit.ifBlank { "حبة" },
+            category = "عام"
+        )
+        return dao.insertProduct(newProduct)
+    }
 
     val allCustomers: Flow<List<Customer>> = dao.getAllCustomers()
     val totalCustomerDebts: Flow<Double> = dao.getTotalCustomerDebts()
@@ -51,10 +77,18 @@ class GroceryRepository(private val dao: GroceryDao) {
     suspend fun getSaleInvoiceCount(): Int = dao.getSaleInvoiceCount()
 
     suspend fun createSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>): Long {
+        val processedItems = items.map { item ->
+            val prodId = if (item.productId != null && item.productId > 0) {
+                item.productId
+            } else {
+                ensureProductExists(item.productName, item.unitPrice, 0.0, item.unit)
+            }
+            item.copy(productId = prodId)
+        }
         val invoiceId = dao.insertSaleInvoice(invoice)
-        dao.insertSaleInvoiceItems(items.map { it.copy(invoiceId = invoiceId) })
-        for (item in items) {
-            item.productId?.let { dao.updateProductStock(it, -item.quantity) }
+        dao.insertSaleInvoiceItems(processedItems.map { it.copy(invoiceId = invoiceId) })
+        for (item in processedItems) {
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, -item.quantity) }
         }
         invoice.customerId?.let { custId ->
             dao.updateCustomerFinancials(custId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)
@@ -79,7 +113,7 @@ class GroceryRepository(private val dao: GroceryDao) {
         // Revert old stock changes
         val oldItems = dao.getItemsForSaleInvoiceList(invoice.id)
         for (item in oldItems) {
-            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, item.quantity) }
         }
         // Revert old customer financials
         val oldInvoice = dao.getSaleInvoiceById(invoice.id)
@@ -88,14 +122,24 @@ class GroceryRepository(private val dao: GroceryDao) {
         }
         dao.deleteCustomerTransactionForInvoice(invoice.id)
 
+        // Process items to ensure all products exist without duplicates
+        val processedItems = items.map { item ->
+            val prodId = if (item.productId != null && item.productId > 0) {
+                item.productId
+            } else {
+                ensureProductExists(item.productName, item.unitPrice, 0.0, item.unit)
+            }
+            item.copy(productId = prodId)
+        }
+
         // Update invoice and items
         dao.insertSaleInvoice(invoice) // REPLACE strategy updates it
         dao.deleteSaleInvoiceItems(invoice.id)
-        dao.insertSaleInvoiceItems(items.map { it.copy(invoiceId = invoice.id) })
+        dao.insertSaleInvoiceItems(processedItems.map { it.copy(invoiceId = invoice.id) })
 
         // Apply new stock
-        for (item in items) {
-            item.productId?.let { dao.updateProductStock(it, -item.quantity) }
+        for (item in processedItems) {
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, -item.quantity) }
         }
         // Apply new customer financials
         invoice.customerId?.let { custId ->
@@ -119,7 +163,7 @@ class GroceryRepository(private val dao: GroceryDao) {
     suspend fun deleteSaleInvoice(invoice: SaleInvoice) {
         val items = dao.getItemsForSaleInvoiceList(invoice.id)
         for (item in items) {
-            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, item.quantity) }
         }
         invoice.customerId?.let {
             dao.updateCustomerFinancials(it, -invoice.remainingAmount, -invoice.grandTotal, -invoice.paidAmount)
@@ -142,10 +186,18 @@ class GroceryRepository(private val dao: GroceryDao) {
     fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>> = dao.getPurchaseInvoicesForSupplier(supplierId)
 
     suspend fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>): Long {
+        val processedItems = items.map { item ->
+            val prodId = if (item.productId != null && item.productId > 0) {
+                item.productId
+            } else {
+                ensureProductExists(item.productName, 0.0, item.unitPrice, item.unit)
+            }
+            item.copy(productId = prodId)
+        }
         val invoiceId = dao.insertPurchaseInvoice(invoice)
-        dao.insertPurchaseInvoiceItems(items.map { it.copy(invoiceId = invoiceId) })
-        for (item in items) {
-            item.productId?.let { dao.updateProductStock(it, item.quantity) }
+        dao.insertPurchaseInvoiceItems(processedItems.map { it.copy(invoiceId = invoiceId) })
+        for (item in processedItems) {
+            item.productId?.let { if (it > 0) dao.updateProductStock(it, item.quantity) }
         }
         invoice.supplierId?.let { suppId ->
             dao.updateSupplierFinancials(suppId, invoice.remainingAmount, invoice.grandTotal, invoice.paidAmount)

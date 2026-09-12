@@ -118,17 +118,19 @@ fun PurchasesScreen(
                 Toast.makeText(context, "أدخل اسم الصنف والعدد والقيمة الإجمالية", Toast.LENGTH_SHORT).show()
                 return
             }
+            val trimmed = itemName.trim()
+            val matched = selectedProduct ?: products.find { it.name.trim().equals(trimmed, ignoreCase = true) }
             val newItem = PurchaseInvoiceItem(
                 id = 0L,
                 invoiceId = 0L,
-                productId = selectedProduct?.id,
-                productName = itemName.trim(),
+                productId = matched?.id,
+                productName = matched?.name ?: trimmed,
                 quantity = qty,
                 unitPrice = calculatedUnitPrice,
                 subtotal = total
             )
             val existingIndex = purchaseItems.indexOfFirst {
-                it.productName.equals(itemName.trim(), ignoreCase = true) && it.productId == selectedProduct?.id
+                it.productName.equals(trimmed, ignoreCase = true)
             }
             purchaseItems = if (existingIndex >= 0) {
                 purchaseItems.toMutableList().also { list ->
@@ -136,6 +138,7 @@ fun PurchasesScreen(
                     val newQ = old.quantity + qty
                     val newSub = old.subtotal + total
                     list[existingIndex] = old.copy(
+                        productId = matched?.id ?: old.productId,
                         quantity = newQ,
                         subtotal = newSub,
                         unitPrice = if (newQ > 0) newSub / newQ else 0.0

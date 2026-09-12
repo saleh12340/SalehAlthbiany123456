@@ -17,51 +17,80 @@ object PurchaseReceiptFormatter {
     private val qty = DecimalFormat("#,##0.##", englishSymbols)
 
     fun generate(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, paperWidth: Int = 384): Bitmap {
-        val scale = if (paperWidth >= 500) 1.35f else 1f
-        val height = ((360 + items.size * 38) * scale).toInt()
+        val is80mm = paperWidth >= 500
+        val scale = if (is80mm) 1.35f else 1f
+        val height = ((320 + items.size * 32) * scale).toInt()
         val bitmap = Bitmap.createBitmap(paperWidth, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
 
-        val right = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 20f * scale; textAlign = Paint.Align.RIGHT }
-        val left = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 20f * scale; textAlign = Paint.Align.LEFT }
-        val center = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 19f * scale; textAlign = Paint.Align.CENTER }
-        val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; typeface = Typeface.DEFAULT_BOLD; textSize = 28f * scale; textAlign = Paint.Align.CENTER }
+        val right = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 19f * scale; textAlign = Paint.Align.RIGHT }
+        val rightBold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; typeface = Typeface.DEFAULT_BOLD; textSize = 19f * scale; textAlign = Paint.Align.RIGHT }
+        val left = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 19f * scale; textAlign = Paint.Align.LEFT }
+        val leftBold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; typeface = Typeface.DEFAULT_BOLD; textSize = 20f * scale; textAlign = Paint.Align.LEFT }
+        val center = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 18f * scale; textAlign = Paint.Align.CENTER }
+        val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; typeface = Typeface.DEFAULT_BOLD; textSize = 26f * scale; textAlign = Paint.Align.CENTER }
+        val subTitle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; typeface = Typeface.DEFAULT_BOLD; textSize = 20f * scale; textAlign = Paint.Align.CENTER }
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; strokeWidth = 1.5f * scale }
 
-        var y = 36f * scale
-        val margin = 14f * scale
+        var y = 28f * scale
+        val margin = 6f * scale
+        val rightMargin = paperWidth - margin
+        val qtyColX = paperWidth * 0.58f
 
         canvas.drawText("بقالة العزي للمواد الغذائية", paperWidth / 2f, y, title)
-        y += 28f * scale
+        y += 24f * scale
         canvas.drawText("هاتف: 776425052", paperWidth / 2f, y, center)
-        y += 24f * scale
-        canvas.drawText("فاتورة مشتريات رقم: ${invoice.invoiceNumber}", paperWidth / 2f, y, center)
-        y += 26f * scale
-        canvas.drawText("المورد: ${invoice.supplierName}", paperWidth - margin, y, right)
-        y += 24f * scale
-        canvas.drawText("${invoice.date} ${invoice.time}", paperWidth - margin, y, right)
-        y += 26f * scale
+        y += 20f * scale
+        canvas.drawText("فاتورة مشتريات #${invoice.invoiceNumber}", paperWidth / 2f, y, subTitle)
+        y += 20f * scale
+        canvas.drawLine(margin, y, rightMargin, y, line)
+        y += 20f * scale
+
+        canvas.drawText("المورد: ${invoice.supplierName}", rightMargin, y, rightBold)
+        y += 20f * scale
+        canvas.drawText("${invoice.date} ${invoice.time}", rightMargin, y, right)
+        y += 20f * scale
+        canvas.drawLine(margin, y, rightMargin, y, line)
+        y += 18f * scale
+
+        // Table Header
+        canvas.drawText("الصنف", rightMargin, y, rightBold)
+        canvas.drawText("العدد", qtyColX, y, center.apply { typeface = Typeface.DEFAULT_BOLD })
+        canvas.drawText("الإجمالي", margin, y, leftBold)
+        y += 18f * scale
 
         for (item in items) {
-            canvas.drawText(item.productName, paperWidth - margin, y, right)
-            canvas.drawText(qty.format(item.quantity), paperWidth * .55f, y, center)
+            canvas.drawText(item.productName, rightMargin, y, right)
+            canvas.drawText(qty.format(item.quantity), qtyColX, y, center.apply { typeface = Typeface.DEFAULT })
             canvas.drawText("${money.format(item.subtotal)} ر.ي", margin, y, left)
-            y += 28f * scale
+            y += 22f * scale
         }
-        y += 10f * scale
-        canvas.drawText("الإجمالي", paperWidth - margin, y, right)
-        canvas.drawText("${money.format(invoice.grandTotal)} ر.ي", margin, y, left)
-        y += 25f * scale
 
-        canvas.drawText("المدفوع", paperWidth - margin, y, right)
+        y += 4f * scale
+        canvas.drawLine(margin, y, rightMargin, y, line)
+        y += 20f * scale
+
+        canvas.drawText("إجمالي المشتريات:", rightMargin, y, rightBold)
+        canvas.drawText("${money.format(invoice.grandTotal)} ر.ي", margin, y, leftBold)
+        y += 20f * scale
+
+        canvas.drawText("المدفوع:", rightMargin, y, right)
         canvas.drawText("${money.format(invoice.paidAmount)} ر.ي", margin, y, left)
-        y += 25f * scale
+        y += 20f * scale
 
-        canvas.drawText("المتبقي", paperWidth - margin, y, right)
-        canvas.drawText("${money.format(invoice.remainingAmount)} ر.ي", margin, y, left)
-        y += 30f * scale
+        if (invoice.remainingAmount > 0) {
+            canvas.drawText("المتبقي للمورد (دين):", rightMargin, y, rightBold)
+            canvas.drawText("${money.format(invoice.remainingAmount)} ر.ي", margin, y, leftBold)
+            y += 20f * scale
+        }
+
+        y += 4f * scale
+        canvas.drawLine(margin, y, rightMargin, y, line)
+        y += 20f * scale
 
         canvas.drawText("فاتورة مورد - بقالة العزي", paperWidth / 2f, y, center)
-        return bitmap
+        return EscPosReceiptFormatter.trimBitmapVertical(bitmap, extraBottomPadding = 8)
     }
 }
+

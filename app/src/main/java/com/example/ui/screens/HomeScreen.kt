@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +55,7 @@ fun HomeScreen(
     viewModel: GroceryViewModel,
     onNavigate: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val todaySales by viewModel.todaySales.collectAsState()
     val todayPurchases by viewModel.todayPurchases.collectAsState()
     val totalDebts by viewModel.totalCustomerDebts.collectAsState()
@@ -62,6 +66,55 @@ fun HomeScreen(
 
     var selectedInvoiceForDetail by remember { mutableStateOf<SaleInvoice?>(null) }
     var showPrinterDialog by remember { mutableStateOf(false) }
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
+
+    // Intercept Android Back Button on Home Screen to show confirmation
+    BackHandler {
+        showExitConfirmDialog = true
+    }
+
+    if (showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.ExitToApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "تأكيد الخروج من التطبيق",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                Text(
+                    text = "هل تود بالفعل الخروج وإغلاق تطبيق بقالة العزي؟\nجميع البيانات والعمليات محفوظة بأمان.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        (context as? Activity)?.finish()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("خروج", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showExitConfirmDialog = false }) {
+                    Text("البقاء بالتطبيق")
+                }
+            }
+        )
+    }
 
     val navActions = listOf(
         QuickNavAction("فواتير المبيعات", Icons.Default.ReceiptLong, "sales", Color(0xFF1E88E5)),

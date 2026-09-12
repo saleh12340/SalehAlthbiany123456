@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,9 +30,16 @@ import com.example.R
 import com.example.ui.components.BluetoothPrinterDialog
 import com.example.ui.components.SectionHeader
 import com.example.ui.viewmodel.GroceryViewModel
+import com.example.util.Formatters
 import com.example.util.PrinterConnectionState
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val SettingsGreen = Color(0xFF0E6B38)
+private val BackupBlue = Color(0xFF1565C0)
+private val WarningAmber = Color(0xFFE65100)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +57,87 @@ fun SettingsScreen(
     val invoices by viewModel.saleInvoices.collectAsState()
     val purchaseInvoices by viewModel.purchaseInvoices.collectAsState()
 
+    val lastBackupInfo by viewModel.lastBackupInfoState.collectAsState()
+    val isAutoBackupEnabled by viewModel.isAutoBackupEnabledState.collectAsState()
+    val isBackupLoading by viewModel.isBackupOperationLoading.collectAsState()
+
     var showPrinterDialog by remember { mutableStateOf(false) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var selectedBackupFileForRestore by remember { mutableStateOf<File?>(null) }
+    var pendingJsonContentForRestore by remember { mutableStateOf<String?>(null) }
+
+    var localBackupsList by remember { mutableStateOf(viewModel.getSavedBackupsList()) }
+
+    // Launcher to pick JSON backup file from phone storage
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val jsonString = inputStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                if (!jsonString.isNullOrBlank()) {
+                    pendingJsonContentForRestore = jsonString
+                    showRestoreConfirmDialog = true
+                } else {
+                    Toast.makeText(context, "الملف فارغ أو غير صالح", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "فشل قراءة الملف: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    // Confirmation dialog before restoring backup
+    if (showRestoreConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreConfirmDialog = false
+                selectedBackupFileForRestore = null
+                pendingJsonContentForRestore = null
+            },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = WarningAmber) },
+            title = { Text("تأكيد استعادة النسخة الاحتياطية", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "تنبيه: سيؤدي استرجاع النسخة الاحتياطية إلى تحديث واستبدال البيانات الحالية بالبيانات الموجودة في ملف النسخة.\n\nهل تود المتابعة؟"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val file = selectedBackupFileForRestore
+                        val json = pendingJsonContentForRestore
+                        showRestoreConfirmDialog = false
+                        selectedBackupFileForRestore = null
+                        pendingJsonContentForRestore = null
+
+                        if (file != null) {
+                            viewModel.restoreBackupFromFile(file) { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
+                        } else if (json != null) {
+                            viewModel.restoreBackupFromJsonString(json) { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = WarningAmber)
+                ) {
+                    Text("نعم، استعادة الآن", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = {
+                    showRestoreConfirmDialog = false
+                    selectedBackupFileForRestore = null
+                    pendingJsonContentForRestore = null
+                }) {
+                    Text("إلغاء")
+                }
+            }
+        )
+    }
 
     if (showPrinterDialog) {
         BluetoothPrinterDialog(
@@ -77,7 +166,7 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Store Info Card (Matching header cards)
+            // Store Info Card
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)),
@@ -120,6 +209,230 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+
+            // ==========================================
+            // BACKUP & RESTORE SECTION
+            // ==========================================
+            SectionHeader(title = "النسخ الاحتياطي والأمان (حفظ ومشاركة البيانات)")
+
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color(0xFFBBDEFB)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Auto Backup Daily Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "النسخ الاحتياطي التلقائي اليومي",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "حفظ نسخة احتياطية في ملفات الهاتف تلقائياً بنهاية كل يوم",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = isAutoBackupEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setAutoBackupEnabled(enabled)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = BackupBlue, checkedTrackColor = BackupBlue.copy(alpha = 0.5f))
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE3F2FD))
+
+                    // Last Backup Status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("آخر نسخة احتياطية:")
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (lastBackupInfo.first.isNotBlank()) SettingsGreen.copy(alpha = 0.12f) else Color.LightGray.copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                text = if (lastBackupInfo.first.isNotBlank()) {
+                                    val timeStr = if (lastBackupInfo.second > 0) {
+                                        SimpleDateFormat("HH:mm", Locale.US).format(Date(lastBackupInfo.second))
+                                    } else ""
+                                    "${lastBackupInfo.first} ($timeStr)"
+                                } else "لم يتم بعد",
+                                fontWeight = FontWeight.Bold,
+                                color = if (lastBackupInfo.first.isNotBlank()) SettingsGreen else Color.DarkGray,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+
+                    if (isBackupLoading) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = BackupBlue)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("جارٍ معالجة البيانات...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    // Main Backup Action Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.exportAndShareBackup { success, msg ->
+                                    localBackupsList = viewModel.getSavedBackupsList()
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("settings_share_backup_btn"),
+                            colors = ButtonDefaults.buttonColors(containerColor = BackupBlue),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isBackupLoading
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("مشاركة عبر واتساب/تيليجرام", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.saveBackupToPhoneFiles { success, msg, _ ->
+                                    localBackupsList = viewModel.getSavedBackupsList()
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("settings_save_backup_btn"),
+                            colors = ButtonDefaults.buttonColors(containerColor = SettingsGreen),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isBackupLoading
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("حفظ في الهاتف", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Restore Button
+                    OutlinedButton(
+                        onClick = {
+                            filePickerLauncher.launch("application/json")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_restore_backup_btn"),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = WarningAmber),
+                        border = BorderStroke(1.dp, WarningAmber),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isBackupLoading
+                    ) {
+                        Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("استعادة نسخة احتياطية من ملف (JSON)", fontWeight = FontWeight.Bold)
+                    }
+
+                    // Saved local backups on device
+                    if (localBackupsList.isNotEmpty()) {
+                        HorizontalDivider(color = Color(0xFFE3F2FD))
+                        Text(
+                            text = "النسخ المحفوظة على هذا الهاتف (${localBackupsList.size}):",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            localBackupsList.take(4).forEach { file ->
+                                Card(
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F7FC)),
+                                    border = BorderStroke(1.dp, Color(0xFFD6E4F0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = file.name,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1
+                                            )
+                                            val sizeKb = (file.length() / 1024.0)
+                                            Text(
+                                                text = "${Formatters.formatNumber(sizeKb)} كيلوبايت",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.Gray
+                                            )
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            IconButton(
+                                                onClick = { viewModel.shareExistingBackupFile(file) },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Share,
+                                                    contentDescription = "مشاركة",
+                                                    tint = BackupBlue,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    selectedBackupFileForRestore = file
+                                                    showRestoreConfirmDialog = true
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Restore,
+                                                    contentDescription = "استعادة",
+                                                    tint = WarningAmber,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -282,7 +595,7 @@ fun SettingsScreen(
                 ) {
                     Text("نظام إدارة بقالة العزي للمواد الغذائية", fontWeight = FontWeight.Bold, color = SettingsGreen)
                     Text("الإصدار 1.0.0 • تطبيق أندرويد متكامل يعمل محلياً دون الحاجة لإنترنت", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("دعم كامل للغة العربية والطباعة الحرارية ESC/POS وإدارة الديون والمخازن", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("دعم كامل للغة العربية والطباعة الحرارية ESC/POS وإدارة الديون والمخازن والنسخ الاحتياطي اليومي والمشاركة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

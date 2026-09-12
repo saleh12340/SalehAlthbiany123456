@@ -89,4 +89,40 @@ interface GroceryDao {
     @Query("SELECT COALESCE(SUM(grandTotal), 0.0) FROM sale_invoices WHERE date = :date") fun getTodaySalesTotal(date: String): Flow<Double>
     @Query("SELECT COALESCE(SUM(paidAmount), 0.0) FROM sale_invoices WHERE date = :date") fun getTodayCashSales(date: String): Flow<Double>
     @Query("SELECT COALESCE(SUM(grandTotal), 0.0) FROM purchase_invoices WHERE date = :date") fun getTodayPurchasesTotal(date: String): Flow<Double>
+
+    // ==========================================
+    // BACKUP & RESTORE DATA ACCESS
+    // ==========================================
+    @Query("SELECT * FROM products ORDER BY id ASC") suspend fun getAllProductsList(): List<Product>
+    @Query("SELECT * FROM customers ORDER BY id ASC") suspend fun getAllCustomersList(): List<Customer>
+    @Query("SELECT * FROM suppliers ORDER BY id ASC") suspend fun getAllSuppliersList(): List<Supplier>
+    @Query("SELECT * FROM sale_invoices ORDER BY id ASC") suspend fun getAllSaleInvoicesList(): List<SaleInvoice>
+    @Query("SELECT * FROM sale_invoice_items ORDER BY id ASC") suspend fun getAllSaleInvoiceItemsList(): List<SaleInvoiceItem>
+    @Query("SELECT * FROM purchase_invoices ORDER BY id ASC") suspend fun getAllPurchaseInvoicesList(): List<PurchaseInvoice>
+    @Query("SELECT * FROM purchase_invoice_items ORDER BY id ASC") suspend fun getAllPurchaseInvoiceItemsList(): List<PurchaseInvoiceItem>
+    @Query("SELECT * FROM customer_transactions ORDER BY id ASC") suspend fun getAllCustomerTransactionsList(): List<CustomerTransaction>
+    @Query("SELECT * FROM supplier_transactions ORDER BY id ASC") suspend fun getAllSupplierTransactionsList(): List<SupplierTransaction>
+    @Query("SELECT * FROM expenses ORDER BY id ASC") suspend fun getAllExpensesList(): List<Expense>
+
+    @Query("DELETE FROM sale_invoice_items") suspend fun clearSaleInvoiceItems()
+    @Query("DELETE FROM sale_invoices") suspend fun clearSaleInvoices()
+    @Query("DELETE FROM purchase_invoice_items") suspend fun clearPurchaseInvoiceItems()
+    @Query("DELETE FROM purchase_invoices") suspend fun clearPurchaseInvoices()
+    @Query("DELETE FROM customer_transactions") suspend fun clearCustomerTransactions()
+    @Query("DELETE FROM supplier_transactions") suspend fun clearSupplierTransactions()
+    @Query("DELETE FROM expenses") suspend fun clearExpenses()
+    @Query("DELETE FROM products") suspend fun clearProducts()
+    @Query("DELETE FROM customers") suspend fun clearCustomers()
+    @Query("DELETE FROM suppliers") suspend fun clearSuppliers()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllProducts(products: List<Product>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllCustomers(customers: List<Customer>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllSuppliers(suppliers: List<Supplier>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllSaleInvoices(invoices: List<SaleInvoice>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllSaleInvoiceItems(items: List<SaleInvoiceItem>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllPurchaseInvoices(invoices: List<PurchaseInvoice>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllPurchaseInvoiceItems(items: List<PurchaseInvoiceItem>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllCustomerTransactions(txs: List<CustomerTransaction>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllSupplierTransactions(txs: List<SupplierTransaction>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAllExpenses(expenses: List<Expense>)
 }

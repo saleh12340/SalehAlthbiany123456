@@ -131,15 +131,17 @@ fun CreateInvoiceScreen(
             Toast.makeText(context, "أدخل اسم الصنف والعدد والقيمة الإجمالية", Toast.LENGTH_SHORT).show()
             return
         }
+        val trimmed = itemName.trim()
+        val matched = selectedProduct ?: products.find { it.name.trim().equals(trimmed, ignoreCase = true) }
         val newItem = SaleInvoiceItem(
             id = 0L,
             invoiceId = editingInvoiceId ?: 0L,
-            productId = selectedProduct?.id,
-            productName = itemName.trim(),
+            productId = matched?.id,
+            productName = matched?.name ?: trimmed,
             quantity = qty,
             unitPrice = calculatedUnitPrice,
             subtotal = total,
-            unit = selectedProduct?.unit ?: "حبة"
+            unit = matched?.unit ?: "حبة"
         )
         saleItems = saleItems + newItem
         itemName = ""

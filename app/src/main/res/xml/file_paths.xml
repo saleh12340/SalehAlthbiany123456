@@ -3,4 +3,9 @@
     <cache-path name="receipts" path="receipts/" />
     <cache-path name="shared_pdf" path="." />
     <external-files-path name="external_receipts" path="receipts/" />
+    <external-files-path name="external_backups" path="backups/" />
+    <external-files-path name="external_documents" path="Documents/" />
+    <files-path name="internal_backups" path="backups/" />
+    <cache-path name="cache_backups" path="backups/" />
+    <external-path name="external_storage" path="." />
 </paths>

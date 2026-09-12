@@ -7,15 +7,18 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.entities.*
 import com.example.data.local.repository.GroceryRepository
 import com.example.ui.components.PostSaveShareData
+import com.example.util.BackupHelper
 import com.example.util.BluetoothPrinterDevice
 import com.example.util.BluetoothPrinterManager
 import com.example.util.CustomerStatementPrinter
 import com.example.util.EscPosReceiptFormatter
 import com.example.util.Formatters
+import com.example.util.FullBackupData
 import com.example.util.PrinterConnectionState
 import com.example.util.PurchaseReceiptFormatter
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 enum class ReportPeriod(val title: String) {
     TODAY("اليوم"), YESTERDAY("أمس"), THIS_WEEK("هذا الأسبوع"), THIS_MONTH("هذا الشهر"), THIS_YEAR("هذه السنة"), CUSTOM("فترة مخصصة")
@@ -34,9 +37,23 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     private val repository: GroceryRepository
     val printerManager: BluetoothPrinterManager = BluetoothPrinterManager(application)
 
+    val lastBackupInfoState = MutableStateFlow(BackupHelper.getLastBackupInfo(application))
+    val isAutoBackupEnabledState = MutableStateFlow(BackupHelper.isAutoBackupEnabled(application))
+    val isBackupOperationLoading = MutableStateFlow(false)
+
     init {
         val database = AppDatabase.getDatabase(application, viewModelScope)
         repository = GroceryRepository(database.groceryDao())
+
+        // Check and perform auto backup in background on app start
+        viewModelScope.launch {
+            try {
+                BackupHelper.checkAndPerformDailyAutoBackup(application, repository)
+                refreshBackupInfo()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     val productSearchQuery = MutableStateFlow("")
@@ -168,6 +185,97 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
             val bitmap = CustomerStatementPrinter.generate(customer, transactions, paperW)
             val success = printerManager.printBitmap(bitmap)
             onResult(success, if (success) "تمت طباعة كشف الحساب بنجاح" else "تعذر الطباعة. تأكد من اتصال طابعة البلوتوث")
+        }
+    }
+
+    // ==========================================
+    // BACKUP & RESTORE ACTIONS
+    // ==========================================
+    fun refreshBackupInfo() {
+        lastBackupInfoState.value = BackupHelper.getLastBackupInfo(getApplication())
+        isAutoBackupEnabledState.value = BackupHelper.isAutoBackupEnabled(getApplication())
+    }
+
+    fun setAutoBackupEnabled(enabled: Boolean) {
+        BackupHelper.setAutoBackupEnabled(getApplication(), enabled)
+        isAutoBackupEnabledState.value = enabled
+    }
+
+    fun getSavedBackupsList(): List<File> {
+        return BackupHelper.getSavedBackupsList(getApplication())
+    }
+
+    fun exportAndShareBackup(onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            isBackupOperationLoading.value = true
+            try {
+                val backupData = BackupHelper.createBackupData(repository)
+                val file = BackupHelper.saveBackupToFile(getApplication(), backupData, isDailyAuto = false)
+                refreshBackupInfo()
+                BackupHelper.shareBackupFile(getApplication(), file, backupData)
+                isBackupOperationLoading.value = false
+                onComplete(true, "تم إنشاء النسخة الاحتياطية بنجاح ومشاركتها")
+            } catch (e: Exception) {
+                isBackupOperationLoading.value = false
+                onComplete(false, "حدث خطأ أثناء النسخ الاحتياطي: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun saveBackupToPhoneFiles(onComplete: (Boolean, String, File?) -> Unit) {
+        viewModelScope.launch {
+            isBackupOperationLoading.value = true
+            try {
+                val backupData = BackupHelper.createBackupData(repository)
+                val file = BackupHelper.saveBackupToFile(getApplication(), backupData, isDailyAuto = false)
+                refreshBackupInfo()
+                isBackupOperationLoading.value = false
+                onComplete(true, "تم حفظ النسخة الاحتياطية بنجاح في مجلد:\n${file.absolutePath}", file)
+            } catch (e: Exception) {
+                isBackupOperationLoading.value = false
+                onComplete(false, "فشل حفظ النسخة: ${e.localizedMessage}", null)
+            }
+        }
+    }
+
+    fun shareExistingBackupFile(file: File) {
+        BackupHelper.shareBackupFile(getApplication(), file, null)
+    }
+
+    fun restoreBackupFromFile(file: File, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            isBackupOperationLoading.value = true
+            try {
+                val jsonString = file.readText(Charsets.UTF_8)
+                val backupData = BackupHelper.fromJson(jsonString)
+                BackupHelper.restoreDatabase(repository, backupData)
+                isBackupOperationLoading.value = false
+                onComplete(
+                    true,
+                    "تمت استعادة البيانات بنجاح!\n• ${backupData.products.size} صنف\n• ${backupData.customers.size} عميل\n• ${backupData.saleInvoices.size} فاتورة مبيعات"
+                )
+            } catch (e: Exception) {
+                isBackupOperationLoading.value = false
+                onComplete(false, "فشلت استعادة البيانات: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun restoreBackupFromJsonString(jsonString: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            isBackupOperationLoading.value = true
+            try {
+                val backupData = BackupHelper.fromJson(jsonString)
+                BackupHelper.restoreDatabase(repository, backupData)
+                isBackupOperationLoading.value = false
+                onComplete(
+                    true,
+                    "تمت استعادة البيانات بنجاح!\n• ${backupData.products.size} صنف\n• ${backupData.customers.size} عميل\n• ${backupData.saleInvoices.size} فاتورة مبيعات"
+                )
+            } catch (e: Exception) {
+                isBackupOperationLoading.value = false
+                onComplete(false, "فشلت استعادة البيانات: ${e.localizedMessage}")
+            }
         }
     }
 }
