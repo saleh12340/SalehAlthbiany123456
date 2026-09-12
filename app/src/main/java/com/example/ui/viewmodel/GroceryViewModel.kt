@@ -109,16 +109,18 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun getCustomerTransactions(customerId: Long): Flow<List<CustomerTransaction>> = repository.getTransactionsForCustomer(customerId)
+    fun getSaleInvoicesForCustomer(customerId: Long): Flow<List<SaleInvoice>> = repository.getSaleInvoicesForCustomer(customerId)
     fun deleteCustomerTransaction(transaction: CustomerTransaction, onComplete: () -> Unit = {}) {
         viewModelScope.launch { repository.deleteCustomerTransaction(transaction); onComplete() }
     }
 
     fun saveSupplier(supplier: Supplier, onComplete: () -> Unit = {}) { viewModelScope.launch { if (supplier.id == 0L) repository.insertSupplier(supplier) else repository.updateSupplier(supplier); onComplete() } }
-    fun deleteSupplier(supplier: Supplier) { viewModelScope.launch { repository.deleteSupplier(supplier) } }
+    fun deleteSupplier(supplier: Supplier, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.deleteSupplier(supplier); onComplete() } }
     fun addSupplierPayment(supplierId: Long, amount: Double, note: String = "", onComplete: () -> Unit = {}) {
         viewModelScope.launch { repository.addSupplierPayment(supplierId, amount, Formatters.getTodayDate(), Formatters.getCurrentTime(), note); onComplete() }
     }
     fun getSupplierTransactions(supplierId: Long): Flow<List<SupplierTransaction>> = repository.getTransactionsForSupplier(supplierId)
+    fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>> = repository.getPurchaseInvoicesForSupplier(supplierId)
 
     fun createSaleInvoice(invoice: SaleInvoice, items: List<SaleInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createSaleInvoice(invoice, items)) } }
     fun deleteSaleInvoice(invoice: SaleInvoice, onComplete: () -> Unit = {}) { viewModelScope.launch { repository.deleteSaleInvoice(invoice); onComplete() } }

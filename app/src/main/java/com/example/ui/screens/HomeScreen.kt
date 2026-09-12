@@ -53,8 +53,9 @@ fun HomeScreen(
     onNavigate: (String) -> Unit
 ) {
     val todaySales by viewModel.todaySales.collectAsState()
-    val todayExpenses by viewModel.todayExpenses.collectAsState()
+    val todayPurchases by viewModel.todayPurchases.collectAsState()
     val totalDebts by viewModel.totalCustomerDebts.collectAsState()
+    val totalSupplierDebts by viewModel.totalSupplierDebts.collectAsState()
     val recentInvoices by viewModel.saleInvoices.collectAsState()
     val lowStockProducts by viewModel.lowStockProducts.collectAsState()
     val printerState by viewModel.printerState.collectAsState()
@@ -62,17 +63,13 @@ fun HomeScreen(
     var selectedInvoiceForDetail by remember { mutableStateOf<SaleInvoice?>(null) }
     var showPrinterDialog by remember { mutableStateOf(false) }
 
-    val netToday = todaySales - todayExpenses
-
     val navActions = listOf(
-        QuickNavAction("الفواتير", Icons.Default.ReceiptLong, "sales", Color(0xFF1E88E5)),
+        QuickNavAction("فواتير المبيعات", Icons.Default.ReceiptLong, "sales", Color(0xFF1E88E5)),
         QuickNavAction("العملاء والحسابات", Icons.Default.People, "customers", Color(0xFF43A047)),
         QuickNavAction("المنتجات والمخزون", Icons.Default.Inventory2, "products", Color(0xFFFB8C00)),
-        QuickNavAction("المشتريات", Icons.Default.ShoppingCart, "purchases", Color(0xFF8E24AA)),
-        QuickNavAction("الموردون", Icons.Default.LocalShipping, "suppliers", Color(0xFF00ACC1)),
-        QuickNavAction("المصروفات", Icons.Default.AccountBalanceWallet, "expenses", Color(0xFFE53935)),
-        QuickNavAction("التقارير", Icons.Default.BarChart, "reports", Color(0xFF3949AB)),
-        QuickNavAction("الإعدادات", Icons.Default.Settings, "settings", Color(0xFF546E7A))
+        QuickNavAction("المشتريات والموردين", Icons.Default.ShoppingCart, "purchases", Color(0xFF8E24AA)),
+        QuickNavAction("التقارير المالية", Icons.Default.BarChart, "reports", Color(0xFF3949AB)),
+        QuickNavAction("الإعدادات والطباعة", Icons.Default.Settings, "settings", Color(0xFF546E7A))
     )
 
     if (showPrinterDialog) {
@@ -246,7 +243,7 @@ fun HomeScreen(
                 }
             }
 
-            // 2. Financial Metrics Grid (مبيعات اليوم، المصروفات، الديون، صافي اليوم)
+            // 2. Financial Metrics Grid (مبيعات اليوم، مشتريات اليوم، ديون العملاء، ديون الموردين)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
@@ -263,13 +260,13 @@ fun HomeScreen(
                             onClick = { onNavigate("sales") }
                         )
                         MetricStatCard(
-                            title = "مصروفات اليوم",
-                            value = Formatters.formatMoney(todayExpenses),
-                            icon = Icons.Default.AccountBalanceWallet,
-                            accentColor = Color(0xFFE53935),
+                            title = "مشتريات اليوم",
+                            value = Formatters.formatMoney(todayPurchases),
+                            icon = Icons.Default.ShoppingCart,
+                            accentColor = Color(0xFF8E24AA),
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.weight(1f),
-                            onClick = { onNavigate("expenses") }
+                            onClick = { onNavigate("purchases") }
                         )
                     }
 
@@ -278,7 +275,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         MetricStatCard(
-                            title = "إجمالي الديون (لنا)",
+                            title = "ديون العملاء (لنا)",
                             value = Formatters.formatMoney(totalDebts),
                             icon = Icons.Default.PeopleAlt,
                             accentColor = GroceryGold,
@@ -287,13 +284,13 @@ fun HomeScreen(
                             onClick = { onNavigate("customers") }
                         )
                         MetricStatCard(
-                            title = "صافي اليوم",
-                            value = Formatters.formatMoney(netToday),
-                            icon = Icons.Default.TrendingUp,
-                            accentColor = if (netToday >= 0) GroceryGreenPrimary else Color(0xFFE53935),
+                            title = "ديون الموردين (علينا)",
+                            value = Formatters.formatMoney(totalSupplierDebts),
+                            icon = Icons.Default.LocalShipping,
+                            accentColor = if (totalSupplierDebts > 0) Color(0xFFE53935) else GroceryGreenPrimary,
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.weight(1f),
-                            onClick = { onNavigate("reports") }
+                            onClick = { onNavigate("purchases") }
                         )
                     }
                 }
@@ -348,19 +345,18 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Main Quick Actions Grid
+            // 4. Main Quick Actions Grid (6 main modules)
             item {
                 SectionHeader(title = "أقسام التطبيق الرئيسية")
             }
 
             item {
-                // Grid of 8 main modules
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val chunkedActions = navActions.chunked(4)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val chunkedActions = navActions.chunked(3)
                     for (rowActions in chunkedActions) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             for (action in rowActions) {
                                 Card(
@@ -375,14 +371,14 @@ fun HomeScreen(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                                            .padding(vertical = 14.dp, horizontal = 6.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.Center
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(RoundedCornerShape(10.dp))
+                                                .size(46.dp)
+                                                .clip(RoundedCornerShape(12.dp))
                                                 .background(action.color.copy(alpha = 0.12f)),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -390,14 +386,14 @@ fun HomeScreen(
                                                 imageVector = action.icon,
                                                 contentDescription = action.title,
                                                 tint = action.color,
-                                                modifier = Modifier.size(22.dp)
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
-                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Text(
                                             text = action.title,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                            fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                                            fontWeight = FontWeight.Bold,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                             maxLines = 2
                                         )

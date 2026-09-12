@@ -61,6 +61,7 @@ interface GroceryDao {
     @Query("SELECT * FROM purchase_invoices WHERE date = :date ORDER BY timestamp DESC") fun getPurchaseInvoicesByDate(date: String): Flow<List<PurchaseInvoice>>
     @Query("SELECT * FROM purchase_invoices WHERE date BETWEEN :startDate AND :endDate ORDER BY timestamp DESC") fun getPurchaseInvoicesBetweenDates(startDate: String, endDate: String): Flow<List<PurchaseInvoice>>
     @Query("SELECT * FROM purchase_invoices WHERE id = :id") suspend fun getPurchaseInvoiceById(id: Long): PurchaseInvoice?
+    @Query("SELECT * FROM purchase_invoices WHERE supplierId = :supplierId ORDER BY timestamp DESC") fun getPurchaseInvoicesForSupplier(supplierId: Long): Flow<List<PurchaseInvoice>>
     @Query("SELECT COUNT(*) FROM purchase_invoices") suspend fun getPurchaseInvoiceCount(): Int
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPurchaseInvoice(invoice: PurchaseInvoice): Long
     @Delete suspend fun deletePurchaseInvoice(invoice: PurchaseInvoice)
