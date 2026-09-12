@@ -46,14 +46,14 @@ object ReceiptShareHelper {
         }
     }
 
-    fun shareInvoiceToWhatsApp(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>) {
-        val text = invoiceText(invoice, items)
+    fun shareInvoiceToWhatsApp(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>, customerBalance: Double? = null) {
+        val text = invoiceText(invoice, items, customerBalance)
         val image = createArabicImage(context, text, "invoice_${invoice.invoiceNumber}")
         shareToWhatsApp(context, image, text, invoice.customerPhone)
     }
 
-    fun saveInvoiceImageToGallery(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>): Uri? {
-        val image = createArabicImage(context, invoiceText(invoice, items), "invoice_${invoice.invoiceNumber}_saved")
+    fun saveInvoiceImageToGallery(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>, customerBalance: Double? = null): Uri? {
+        val image = createArabicImage(context, invoiceText(invoice, items, customerBalance), "invoice_${invoice.invoiceNumber}_saved")
         return image?.let { saveBitmapToGallery(context, it, "فاتورة_${invoice.invoiceNumber}") }
     }
 
@@ -105,7 +105,7 @@ object ReceiptShareHelper {
         shareToWhatsApp(context, image, text, customerPhone)
     }
 
-    private fun invoiceText(invoice: SaleInvoice, items: List<SaleInvoiceItem>): String = buildString {
+    private fun invoiceText(invoice: SaleInvoice, items: List<SaleInvoiceItem>, customerBalance: Double? = null): String = buildString {
         appendLine(STORE)
         appendLine("هاتف: $PHONE")
         appendLine("فاتورة مبيعات رقم: ${invoice.invoiceNumber}")
@@ -123,8 +123,12 @@ object ReceiptShareHelper {
         }
         appendLine("المدفوع: ${Formatters.formatMoney(invoice.paidAmount)}")
         if (invoice.remainingAmount > 0) {
-            appendLine("المتبقي (دين): ${Formatters.formatMoney(invoice.remainingAmount)}")
-        } else {
+            appendLine("المتبقي من الفاتورة: ${Formatters.formatMoney(invoice.remainingAmount)}")
+        }
+        if (customerBalance != null) {
+            appendLine("------------------------")
+            appendLine("الرصيد المتبقي عليكم من حسابكم: ${Formatters.formatMoney(customerBalance)}")
+        } else if (invoice.remainingAmount <= 0) {
             appendLine("الحالة: مسدد بالكامل (خالص)")
         }
     }

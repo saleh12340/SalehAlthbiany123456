@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -511,33 +512,125 @@ fun CustomersScreen(
                                 Text("لا توجد حركات مسجلة للعميل حتى الآن", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
-                            LazyColumn(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                items(transactions) { tx ->
-                                    Card(
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        border = BorderStroke(1.dp, Color(0xFFE4EBE6)),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
+                            val balances = remember(transactions, customer.balance) {
+                                val list = mutableListOf<Double>()
+                                var currentBal = customer.balance
+                                for (tx in transactions) {
+                                    list.add(currentBal)
+                                    currentBal = currentBal - tx.amount + tx.paid
+                                }
+                                list
+                            }
+
+                            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                // Table Header
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(CustomerGreen)
+                                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("التاريخ", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.2f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Text("المبلغ", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.2f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Text("التفاصيل", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Text("الرصيد", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.2f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Spacer(modifier = Modifier.width(32.dp)) // For trailing icon button
+                                }
+
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    itemsIndexed(transactions) { index, tx ->
+                                        val txBalance = balances[index]
+                                        val isPayment = tx.paid > 0
+                                        val amountDisplay = if (isPayment) tx.paid else tx.amount
+                                        val rowBg = if (index % 2 == 0) MaterialTheme.colorScheme.surface else Color(0xFFF9F9F9)
+                                        var expanded by remember { mutableStateOf(false) }
+
                                         Row(
-                                            modifier = Modifier.fillMaxWidth().padding(10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(rowBg)
+                                                .padding(vertical = 12.dp, horizontal = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column {
-                                                Text(tx.type + (if (tx.description.isNotBlank()) " - ${tx.description}" else ""), fontWeight = FontWeight.Bold)
-                                                Text("${tx.date} • ${tx.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(tx.date, style = MaterialTheme.typography.bodySmall)
+                                                Text(tx.time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            val amountDisplay = if (tx.paid > 0) tx.paid else tx.amount
+                                            Row(modifier = Modifier.weight(1.2f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                                Icon(
+                                                    imageVector = if (isPayment) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                                    contentDescription = null,
+                                                    tint = if (isPayment) CustomerGreen else MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text(
+                                                    text = Formatters.formatNumber(amountDisplay),
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            }
                                             Text(
-                                                text = (if (tx.paid > 0) "- " else "+ ") + Formatters.formatMoney(amountDisplay),
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (tx.paid > 0) CustomerGreen else MaterialTheme.colorScheme.error
+                                                text = tx.description.ifBlank { tx.type },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1.5f),
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                maxLines = 2
                                             )
+                                            Text(
+                                                text = Formatters.formatNumber(txBalance),
+                                                fontWeight = FontWeight.SemiBold,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = if (txBalance > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.weight(1.2f),
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                            )
+                                            
+                                            // Trailing Actions Menu
+                                            Box(modifier = Modifier.width(32.dp)) {
+                                                IconButton(
+                                                    onClick = { expanded = true },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(Icons.Default.MoreVert, contentDescription = "خيارات", modifier = Modifier.size(20.dp))
+                                                }
+                                                DropdownMenu(
+                                                    expanded = expanded,
+                                                    onDismissRequest = { expanded = false }
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = { Text("مشاركة عبر واتساب") },
+                                                        leadingIcon = { Icon(Icons.Default.Share, null, tint = Color(0xFF25D366)) },
+                                                        onClick = {
+                                                            expanded = false
+                                                            ReceiptShareHelper.shareTransactionReceiptToWhatsApp(
+                                                                context = context,
+                                                                customerName = customer.name,
+                                                                customerPhone = customer.phone,
+                                                                title = if (isPayment) "سند قبض" else "فاتورة",
+                                                                amount = amountDisplay,
+                                                                currentBalance = txBalance
+                                                            )
+                                                        }
+                                                    )
+                                                    if (tx.invoiceId != null && onNavigateToEditInvoice != null) {
+                                                        DropdownMenuItem(
+                                                            text = { Text("تعديل الفاتورة") },
+                                                            leadingIcon = { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) },
+                                                            onClick = {
+                                                                expanded = false
+                                                                selectedCustomerForDetail = null
+                                                                onNavigateToEditInvoice(tx.invoiceId)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
+                                        HorizontalDivider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
                                     }
                                 }
                             }

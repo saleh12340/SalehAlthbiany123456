@@ -186,7 +186,7 @@ fun CreateInvoiceScreen(
 
                     val shareMsg = if (remainingAmount > 0) "عليه ${Formatters.formatMoney(remainingAmount)}" else "تم حفظ الفاتورة (خالصة)"
                     viewModel.triggerPostSaveShare(shareMsg) {
-                        ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice, saleItems)
+                        viewModel.shareInvoiceWithBalance(context, invoice, saleItems)
                     }
 
                     Toast.makeText(context, "تم تحديث الفاتورة بنجاح", Toast.LENGTH_SHORT).show()
@@ -200,7 +200,7 @@ fun CreateInvoiceScreen(
 
                     val shareMsg = if (remainingAmount > 0) "عليه ${Formatters.formatMoney(remainingAmount)}" else "تم حفظ الفاتورة (خالصة)"
                     viewModel.triggerPostSaveShare(shareMsg) {
-                        ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice.copy(id = createdId), saleItems)
+                        viewModel.shareInvoiceWithBalance(context, invoice.copy(id = createdId), saleItems)
                     }
 
                     Toast.makeText(context, "تم حفظ الفاتورة بنجاح", Toast.LENGTH_SHORT).show()

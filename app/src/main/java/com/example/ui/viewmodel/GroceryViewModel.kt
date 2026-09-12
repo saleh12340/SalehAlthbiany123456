@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -16,6 +17,7 @@ import com.example.util.Formatters
 import com.example.util.FullBackupData
 import com.example.util.PrinterConnectionState
 import com.example.util.PurchaseReceiptFormatter
+import com.example.util.ReceiptShareHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -31,6 +33,24 @@ data class ReportSummary(
     val totalCollected: Double = 0.0,
     val totalDebts: Double = 0.0,
     val netProfit: Double = 0.0
+)
+
+enum class TransactionReferenceType {
+    SALE_INVOICE, PURCHASE_INVOICE, EXPENSE, CUSTOMER_PAYMENT, SUPPLIER_PAYMENT
+}
+
+data class GlobalTransaction(
+    val id: String,
+    val timestamp: Long,
+    val date: String,
+    val time: String,
+    val type: String,
+    val title: String,
+    val amount: Double,
+    val isPositive: Boolean, // e.g. true for income/collected, false for expenses/paid
+    val referenceId: Long,
+    val referenceType: TransactionReferenceType,
+    val relatedName: String? = null
 )
 
 class GroceryViewModel(application: Application) : AndroidViewModel(application) {
@@ -94,16 +114,131 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val reportSummary: StateFlow<ReportSummary> = combine(reportDateRange, saleInvoices, purchaseInvoices, expenses, totalCustomerDebts) { dateRange, sales, purchases, exps, debts ->
+    val reportSummary: StateFlow<ReportSummary> = combine(
+        combine(reportDateRange, saleInvoices, purchaseInvoices) { dr, s, p -> Triple(dr, s, p) },
+        combine(expenses, totalCustomerDebts, repository.getAllCustomerTransactions()) { e, d, ctx -> Triple(e, d, ctx) }
+    ) { (dateRange, sales, purchases), (exps, debts, custTxs) ->
         val filteredSales = sales.filter { it.date in dateRange.first..dateRange.second }
         val filteredPurchases = purchases.filter { it.date in dateRange.first..dateRange.second }
         val filteredExpenses = exps.filter { it.date in dateRange.first..dateRange.second }
+        
+        // Include standalone payments (not part of an invoice) made in the selected period
+        val filteredCustPayments = custTxs.filter { it.date in dateRange.first..dateRange.second && it.invoiceId == null && it.paid > 0 }
+        
         val salesSum = filteredSales.sumOf { it.grandTotal }
-        val collectedSum = filteredSales.sumOf { it.paidAmount }
+        val collectedSum = filteredSales.sumOf { it.paidAmount } + filteredCustPayments.sumOf { it.paid }
         val purchasesSum = filteredPurchases.sumOf { it.grandTotal }
         val expensesSum = filteredExpenses.sumOf { it.amount }
+        
         ReportSummary(salesSum, purchasesSum, expensesSum, collectedSum, debts, salesSum - purchasesSum - expensesSum)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReportSummary())
+
+    val globalTransactions: StateFlow<List<GlobalTransaction>> = combine(
+        saleInvoices,
+        purchaseInvoices,
+        expenses,
+        combine(
+            repository.getAllCustomerTransactions(),
+            repository.getAllSupplierTransactions(),
+            customers,
+            suppliers
+        ) { custTxs, supTxs, custs, sups ->
+            object {
+                val custTxs = custTxs
+                val supTxs = supTxs
+                val custs = custs
+                val sups = sups
+            }
+        }
+    ) { sales, purchases, exps, extra ->
+        val list = mutableListOf<GlobalTransaction>()
+        
+        sales.forEach { s ->
+            list.add(GlobalTransaction(
+                id = "sale_${s.id}",
+                timestamp = s.timestamp,
+                date = s.date,
+                time = s.time,
+                type = "فاتورة مبيعات",
+                title = "فاتورة مبيعات رقم ${s.invoiceNumber}",
+                amount = s.grandTotal,
+                isPositive = true,
+                referenceId = s.id,
+                referenceType = TransactionReferenceType.SALE_INVOICE,
+                relatedName = s.customerName
+            ))
+        }
+
+        purchases.forEach { p ->
+            list.add(GlobalTransaction(
+                id = "pur_${p.id}",
+                timestamp = p.timestamp,
+                date = p.date,
+                time = p.time,
+                type = "فاتورة مشتريات",
+                title = "فاتورة مشتريات رقم ${p.invoiceNumber}",
+                amount = p.grandTotal,
+                isPositive = false,
+                referenceId = p.id,
+                referenceType = TransactionReferenceType.PURCHASE_INVOICE,
+                relatedName = p.supplierName
+            ))
+        }
+
+        exps.forEach { e ->
+            list.add(GlobalTransaction(
+                id = "exp_${e.id}",
+                timestamp = e.timestamp,
+                date = e.date,
+                time = e.time,
+                type = "مصروف",
+                title = e.title,
+                amount = e.amount,
+                isPositive = false,
+                referenceId = e.id,
+                referenceType = TransactionReferenceType.EXPENSE,
+                relatedName = e.category
+            ))
+        }
+
+        // Customer payments
+        extra.custTxs.filter { it.paid > 0 && it.invoiceId == null }.forEach { c ->
+            val custName = extra.custs.find { it.id == c.customerId }?.name ?: "عميل غير معروف"
+            list.add(GlobalTransaction(
+                id = "cpay_${c.id}",
+                timestamp = c.timestamp,
+                date = c.date,
+                time = c.time,
+                type = "سند قبض",
+                title = c.description.ifBlank { c.type },
+                amount = c.paid,
+                isPositive = true,
+                referenceId = c.customerId, // storing customerId here since we don't edit the payment directly from here right now, or maybe c.id
+                referenceType = TransactionReferenceType.CUSTOMER_PAYMENT,
+                relatedName = custName
+            ))
+        }
+
+        // Supplier payments
+        extra.supTxs.filter { it.paid > 0 && it.invoiceId == null }.forEach { s ->
+            val supName = extra.sups.find { it.id == s.supplierId }?.name ?: "مورد غير معروف"
+            list.add(GlobalTransaction(
+                id = "spay_${s.id}",
+                timestamp = s.timestamp,
+                date = s.date,
+                time = s.time,
+                type = "سند صرف",
+                title = s.description.ifBlank { s.type },
+                amount = s.paid,
+                isPositive = false,
+                referenceId = s.supplierId, // storing supplierId
+                referenceType = TransactionReferenceType.SUPPLIER_PAYMENT,
+                relatedName = supName
+            ))
+        }
+
+        list.sortedByDescending { it.timestamp }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val printerState: StateFlow<PrinterConnectionState> = printerManager.connectionState
     val paperSize: StateFlow<String> = printerManager.paperSize
@@ -159,6 +294,13 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     fun getInvoiceItems(invoiceId: Long): Flow<List<SaleInvoiceItem>> = repository.getItemsForSaleInvoice(invoiceId)
     suspend fun getInvoiceItemsList(invoiceId: Long): List<SaleInvoiceItem> = repository.getItemsForSaleInvoiceList(invoiceId)
     suspend fun getSaleInvoiceById(id: Long): SaleInvoice? = repository.getSaleInvoiceById(id)
+
+    fun shareInvoiceWithBalance(context: Context, invoice: SaleInvoice, items: List<SaleInvoiceItem>) {
+        viewModelScope.launch {
+            val customer = if (invoice.customerId != null) repository.getCustomerById(invoice.customerId) else null
+            ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice, items, customer?.balance)
+        }
+    }
     suspend fun getNextSaleInvoiceNumber(): String = Formatters.generateInvoiceNumber("INV", repository.getSaleInvoiceCount())
 
     fun createPurchaseInvoice(invoice: PurchaseInvoice, items: List<PurchaseInvoiceItem>, onSuccess: (Long) -> Unit) { viewModelScope.launch { onSuccess(repository.createPurchaseInvoice(invoice, items)) } }

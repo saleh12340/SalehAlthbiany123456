@@ -281,6 +281,7 @@ class GroceryRepository(private val dao: GroceryDao) {
     suspend fun getItemsForPurchaseInvoiceList(invoiceId: Long): List<PurchaseInvoiceItem> = dao.getItemsForPurchaseInvoiceList(invoiceId)
 
     fun getTransactionsForCustomer(customerId: Long): Flow<List<CustomerTransaction>> = dao.getTransactionsForCustomer(customerId)
+    fun getAllCustomerTransactions(): Flow<List<CustomerTransaction>> = dao.getAllCustomerTransactions()
     suspend fun addCustomerPayment(customerId: Long, amount: Double, date: String, time: String, note: String): Long {
         dao.updateCustomerFinancials(customerId, -amount, 0.0, amount)
         return dao.insertCustomerTransaction(
@@ -298,6 +299,7 @@ class GroceryRepository(private val dao: GroceryDao) {
     }
 
     fun getTransactionsForSupplier(supplierId: Long): Flow<List<SupplierTransaction>> = dao.getTransactionsForSupplier(supplierId)
+    fun getAllSupplierTransactions(): Flow<List<SupplierTransaction>> = dao.getAllSupplierTransactions()
     suspend fun addSupplierPayment(supplierId: Long, amount: Double, date: String, time: String, note: String): Long {
         dao.updateSupplierFinancials(supplierId, -amount, 0.0, amount)
         return dao.insertSupplierTransaction(

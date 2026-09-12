@@ -579,7 +579,7 @@ fun SalesInvoicesScreen(
                                     val savedInv = newInvoice.copy(id = createdId)
                                     val shareMsg = if (remainingAmount > 0) "عليه ${Formatters.formatMoney(remainingAmount)}" else "تم حفظ الفاتورة (خالصة)"
                                     viewModel.triggerPostSaveShare(shareMsg) {
-                                        ReceiptShareHelper.shareInvoiceToWhatsApp(context, savedInv, invoiceItems)
+                                        viewModel.shareInvoiceWithBalance(context, savedInv, invoiceItems)
                                     }
                                     showQuickCreateInvoice = false
                                     Toast.makeText(context, "تم حفظ الفاتورة وتحديث المخزون بنجاح", Toast.LENGTH_SHORT).show()
@@ -901,7 +901,7 @@ fun SalesInvoicesScreen(
                                             onClick = {
                                                 coroutineScope.launch {
                                                     val itemsList = viewModel.getInvoiceItemsList(invoice.id)
-                                                    ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice, itemsList)
+                                                    viewModel.shareInvoiceWithBalance(context, invoice, itemsList)
                                                 }
                                             },
                                             modifier = Modifier.size(34.dp)

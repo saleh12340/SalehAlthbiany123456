@@ -312,7 +312,7 @@ fun InvoiceDetailDialog(
 
                     Button(
                         onClick = {
-                            ReceiptShareHelper.shareInvoiceToWhatsApp(context, invoice, items)
+                            viewModel.shareInvoiceWithBalance(context, invoice, items)
                         },
                         modifier = Modifier.weight(1f).height(46.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),

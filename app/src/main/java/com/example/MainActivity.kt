@@ -175,7 +175,9 @@ class MainActivity : ComponentActivity() {
                             composable("reports") {
                                 ReportsScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { navController.popBackStack() }
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToEditSaleInvoice = { id -> navController.navigate("create_invoice?invoiceId=$id") },
+                                    onNavigateToEditPurchaseInvoice = { id -> navController.navigate("purchases?editId=$id") }
                                 )
                             }
 
