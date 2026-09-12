@@ -61,6 +61,23 @@ class GroceryRepository(private val dao: GroceryDao) {
         dao.deleteCustomerTransaction(transaction)
     }
 
+    suspend fun updateCustomerTransaction(newTx: CustomerTransaction) {
+        val oldTx = dao.getCustomerTransactionById(newTx.id) ?: return
+        // 1. Revert old transaction effect
+        if (oldTx.invoiceId != null) {
+            dao.updateCustomerFinancials(oldTx.customerId, -oldTx.remaining, -oldTx.amount, -oldTx.paid)
+        } else {
+            dao.updateCustomerFinancials(oldTx.customerId, oldTx.paid, 0.0, -oldTx.paid)
+        }
+        // 2. Apply new transaction effect
+        if (newTx.invoiceId != null) {
+            dao.updateCustomerFinancials(newTx.customerId, newTx.remaining, newTx.amount, newTx.paid)
+        } else {
+            dao.updateCustomerFinancials(newTx.customerId, -newTx.paid, 0.0, newTx.paid)
+        }
+        dao.updateCustomerTransaction(newTx)
+    }
+
     val allSuppliers: Flow<List<Supplier>> = dao.getAllSuppliers()
     val totalSupplierDebts: Flow<Double> = dao.getTotalSupplierDebts()
     fun searchSuppliers(query: String): Flow<List<Supplier>> = dao.searchSuppliers(query)
@@ -298,6 +315,22 @@ class GroceryRepository(private val dao: GroceryDao) {
         )
     }
 
+    suspend fun addCustomerDisbursement(customerId: Long, amount: Double, date: String, time: String, note: String): Long {
+        dao.updateCustomerFinancials(customerId, amount, amount, 0.0)
+        return dao.insertCustomerTransaction(
+            CustomerTransaction(
+                customerId = customerId,
+                date = date,
+                time = time,
+                type = "سند صرف",
+                description = if (note.isNotBlank()) "سند صرف: $note" else "سند صرف نقدي",
+                amount = amount,
+                paid = 0.0,
+                remaining = amount
+            )
+        )
+    }
+
     fun getTransactionsForSupplier(supplierId: Long): Flow<List<SupplierTransaction>> = dao.getTransactionsForSupplier(supplierId)
     fun getAllSupplierTransactions(): Flow<List<SupplierTransaction>> = dao.getAllSupplierTransactions()
     suspend fun addSupplierPayment(supplierId: Long, amount: Double, date: String, time: String, note: String): Long {
@@ -314,6 +347,32 @@ class GroceryRepository(private val dao: GroceryDao) {
                 remaining = 0.0
             )
         )
+    }
+
+    suspend fun deleteSupplierTransaction(transaction: SupplierTransaction) {
+        if (transaction.invoiceId != null) {
+            dao.updateSupplierFinancials(transaction.supplierId, -transaction.remaining, -transaction.amount, -transaction.paid)
+        } else {
+            dao.updateSupplierFinancials(transaction.supplierId, transaction.paid, 0.0, -transaction.paid)
+        }
+        dao.deleteSupplierTransaction(transaction)
+    }
+
+    suspend fun updateSupplierTransaction(newTx: SupplierTransaction) {
+        val oldTx = dao.getSupplierTransactionById(newTx.id) ?: return
+        // 1. Revert old transaction effect
+        if (oldTx.invoiceId != null) {
+            dao.updateSupplierFinancials(oldTx.supplierId, -oldTx.remaining, -oldTx.amount, -oldTx.paid)
+        } else {
+            dao.updateSupplierFinancials(oldTx.supplierId, oldTx.paid, 0.0, -oldTx.paid)
+        }
+        // 2. Apply new transaction effect
+        if (newTx.invoiceId != null) {
+            dao.updateSupplierFinancials(newTx.supplierId, newTx.remaining, newTx.amount, newTx.paid)
+        } else {
+            dao.updateSupplierFinancials(newTx.supplierId, -newTx.paid, 0.0, newTx.paid)
+        }
+        dao.updateSupplierTransaction(newTx)
     }
 
     val allExpenses: Flow<List<Expense>> = dao.getAllExpenses()

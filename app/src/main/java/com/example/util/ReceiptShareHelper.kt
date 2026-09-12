@@ -261,6 +261,36 @@ object ReceiptShareHelper {
         }
         sendSMS(context, customerPhone, text)
     }
+
+    fun shareSupplierPaymentToWhatsApp(context: Context, supplierName: String, supplierPhone: String, amount: Double, currentBalance: Double, note: String) {
+        val text = buildString {
+            appendLine(STORE)
+            appendLine("هاتف: $PHONE")
+            appendLine("سند صرف / دفعة للمورد")
+            appendLine("المورد: $supplierName")
+            if (supplierPhone.isNotBlank()) appendLine("الهاتف: $supplierPhone")
+            appendLine("------------------------")
+            appendLine("المبلغ المصروف: ${Formatters.formatMoney(amount)}")
+            if (note.isNotBlank()) appendLine("البيان: $note")
+            appendLine("المستحق المتبقي للمورد: ${Formatters.formatMoney(currentBalance)}")
+            appendLine("التاريخ: ${Formatters.getTodayDate()} ${Formatters.getCurrentTime()}")
+            appendLine("------------------------")
+            appendLine("شكراً لتعاملكم معنا")
+        }
+        val image = createArabicImage(context, text, "supplier_payment_${System.currentTimeMillis()}")
+        shareToWhatsApp(context, image, text, supplierPhone)
+    }
+
+    fun shareSupplierPaymentViaSMS(context: Context, supplierName: String, supplierPhone: String, amount: Double, currentBalance: Double, note: String) {
+        val text = buildString {
+            appendLine("بقالة العزي")
+            appendLine("سند صرف للمورد: $supplierName")
+            appendLine("المبلغ: ${Formatters.formatMoney(amount)}")
+            if (note.isNotBlank()) appendLine("البيان: $note")
+            appendLine("المستحق للمورد: ${Formatters.formatMoney(currentBalance)}")
+        }
+        sendSMS(context, supplierPhone, text)
+    }
     
     private fun sendSMS(context: Context, phone: String, text: String) {
         try {

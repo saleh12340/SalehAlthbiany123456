@@ -66,6 +66,8 @@ fun CustomersScreen(
     var selectedCustomerForDetail by remember { mutableStateOf<Customer?>(null) }
     var selectedInvoiceForDetail by remember { mutableStateOf<SaleInvoice?>(null) }
     var paymentCustomer by remember { mutableStateOf<Customer?>(null) }
+    var disbursementCustomer by remember { mutableStateOf<Customer?>(null) }
+    var editingTx by remember { mutableStateOf<CustomerTransaction?>(null) }
     var deleteCustomer by remember { mutableStateOf<Customer?>(null) }
     var filterType by remember { mutableStateOf("الكل") }
 
@@ -435,6 +437,131 @@ fun CustomersScreen(
         )
     }
 
+    // DISBURSEMENT DIALOG (سند صرف للعميل)
+    disbursementCustomer?.let { customer ->
+        var amountText by remember { mutableStateOf("") }
+        var notesText by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { disbursementCustomer = null },
+            title = {
+                Text("تسجيل سند صرف (دفع للعميل)", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("العميل: ${customer.name}", fontWeight = FontWeight.Bold)
+                    Text("الرصيد المستحق (الدين): ${Formatters.formatMoney(customer.balance)}", color = MaterialTheme.colorScheme.error)
+
+                    UnifiedOutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = Formatters.englishDigits(it) },
+                        label = { Text("المبلغ المصروف *") },
+                        placeholder = { Text("0.00") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    UnifiedOutlinedTextField(
+                        value = notesText,
+                        onValueChange = { notesText = it },
+                        label = { Text("ملاحظات السند") },
+                        placeholder = { Text("صرف نقدية / سلفة") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amount = Formatters.englishDigits(amountText).toDoubleOrNull()
+                        if (amount == null || amount <= 0) {
+                            Toast.makeText(context, "أدخل مبلغاً صحيحاً", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.addCustomerDisbursement(
+                            customerId = customer.id,
+                            amount = amount,
+                            note = notesText.ifBlank { "سند صرف" }
+                        ) {
+                            Toast.makeText(context, "تم تسجيل سند الصرف بنجاح وتحديث الرصيد", Toast.LENGTH_SHORT).show()
+                            disbursementCustomer = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("حفظ سند الصرف")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { disbursementCustomer = null }) {
+                    Text("إلغاء")
+                }
+            }
+        )
+    }
+
+    // EDIT TRANSACTION DIALOG (تعديل السند)
+    editingTx?.let { tx ->
+        var amountText by remember { mutableStateOf(if (tx.paid > 0) tx.paid.toString() else tx.amount.toString()) }
+        var notesText by remember { mutableStateOf(tx.description) }
+
+        AlertDialog(
+            onDismissRequest = { editingTx = null },
+            title = {
+                Text("تعديل ${tx.type}", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    UnifiedOutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = Formatters.englishDigits(it) },
+                        label = { Text("المبلغ *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    UnifiedOutlinedTextField(
+                        value = notesText,
+                        onValueChange = { notesText = it },
+                        label = { Text("البيان / ملاحظات") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newAmount = Formatters.englishDigits(amountText).toDoubleOrNull()
+                        if (newAmount == null || newAmount <= 0) {
+                            Toast.makeText(context, "أدخل مبلغاً صحيحاً", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val updatedTx = if (tx.paid > 0) {
+                            tx.copy(paid = newAmount, description = notesText)
+                        } else {
+                            tx.copy(amount = newAmount, remaining = newAmount, description = notesText)
+                        }
+                        viewModel.updateCustomerTransaction(updatedTx) {
+                            editingTx = null
+                            Toast.makeText(context, "تم تحديث السند بنجاح", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("تعديل")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingTx = null }) {
+                    Text("إلغاء")
+                }
+            }
+        )
+    }
+
     // ==========================================
     // CUSTOMER DETAILS & STATEMENT DIALOG
     // ==========================================
@@ -542,30 +669,50 @@ fun CustomersScreen(
 
                             HorizontalDivider(color = Color(0xFFE4EBE6))
 
-                            // Current Balance and Quick Payment
-                            Row(
+                            // Current Balance and Quick Payment / Disbursement
+                            Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Column {
-                                    Text("الرصيد المستحق (الدين):", style = MaterialTheme.typography.bodySmall)
-                                    Text(
-                                        text = Formatters.formatMoney(customer.balance),
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = if (customer.balance > 0) MaterialTheme.colorScheme.error else CustomerGreen
-                                    )
-                                }
-
-                                Button(
-                                    onClick = { paymentCustomer = customer },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CustomerGreen),
-                                    shape = RoundedCornerShape(10.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Payment, null, Modifier.size(16.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("سند قبض جديد", fontWeight = FontWeight.Bold)
+                                    Column {
+                                        Text("الرصيد المستحق (الدين):", style = MaterialTheme.typography.bodySmall)
+                                        Text(
+                                            text = Formatters.formatMoney(customer.balance),
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = if (customer.balance > 0) MaterialTheme.colorScheme.error else CustomerGreen
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { paymentCustomer = customer },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CustomerGreen),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Payment, null, Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("سند قبض", fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { disbursementCustomer = customer },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.MoneyOff, null, Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("سند صرف", fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }

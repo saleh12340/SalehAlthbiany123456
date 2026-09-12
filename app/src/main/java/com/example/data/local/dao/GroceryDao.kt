@@ -74,12 +74,16 @@ interface GroceryDao {
 
     @Query("SELECT * FROM customer_transactions WHERE customerId = :customerId ORDER BY timestamp DESC") fun getTransactionsForCustomer(customerId: Long): Flow<List<CustomerTransaction>>
     @Query("SELECT * FROM customer_transactions ORDER BY timestamp DESC") fun getAllCustomerTransactions(): Flow<List<CustomerTransaction>>
+    @Query("SELECT * FROM customer_transactions WHERE id = :id") suspend fun getCustomerTransactionById(id: Long): CustomerTransaction?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertCustomerTransaction(transaction: CustomerTransaction): Long
+    @Update suspend fun updateCustomerTransaction(transaction: CustomerTransaction)
     @Delete suspend fun deleteCustomerTransaction(transaction: CustomerTransaction)
     @Query("SELECT * FROM supplier_transactions WHERE supplierId = :supplierId ORDER BY timestamp DESC") fun getTransactionsForSupplier(supplierId: Long): Flow<List<SupplierTransaction>>
     @Query("SELECT * FROM supplier_transactions ORDER BY timestamp DESC") fun getAllSupplierTransactions(): Flow<List<SupplierTransaction>>
+    @Query("SELECT * FROM supplier_transactions WHERE id = :id") suspend fun getSupplierTransactionById(id: Long): SupplierTransaction?
     @Query("SELECT * FROM supplier_transactions WHERE supplierId = :supplierId") suspend fun getTransactionsForSupplierList(supplierId: Long): List<SupplierTransaction>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSupplierTransaction(transaction: SupplierTransaction): Long
+    @Update suspend fun updateSupplierTransaction(transaction: SupplierTransaction)
     @Delete suspend fun deleteSupplierTransaction(transaction: SupplierTransaction)
 
     @Query("SELECT * FROM expenses ORDER BY timestamp DESC") fun getAllExpenses(): Flow<List<Expense>>
